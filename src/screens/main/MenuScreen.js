@@ -234,7 +234,7 @@ const MenuScreen = ({ navigation }) => {
     const [currentLocation, setCurrentLocation] = useState('Fetching location...');
     const [isLocating, setIsLocating] = useState(false);
     const { isFavorite, toggleFavorite } = useFavorites();
-    const { cart, addToCart, getCartCount, getCartTotal } = useCart();
+    const { cart, addToCart, removeFromCart, getCartCount, getCartTotal } = useCart();
 
     useEffect(() => {
         loadMenuItems();
@@ -488,6 +488,7 @@ const MenuScreen = ({ navigation }) => {
                                 <ProductCard
                                     item={item}
                                     onAddToCart={() => addToCart(item)}
+                                    onRemoveFromCart={() => removeFromCart(item.id)}
                                     quantity={cart[item.id]?.quantity || 0}
                                     isFavorite={isFavorite(item.id)}
                                     onToggleFavorite={() => toggleFavorite(item.id)}
@@ -500,8 +501,8 @@ const MenuScreen = ({ navigation }) => {
                 </>
             )}
 
-            {/* Cart Summary */}
-            {getCartCount() > 0 && (
+            {/* Cart Summary commented out as requested */}
+            {/* {getCartCount() > 0 && (
                 <Animatable.View animation="slideInUp" duration={300} style={styles.cartSummary}>
                     <View style={styles.cartInfo}>
                         <View style={styles.cartBadge}>
@@ -520,7 +521,7 @@ const MenuScreen = ({ navigation }) => {
                         <Icon name="arrow-forward" size={16} color={COLORS.white} />
                     </TouchableOpacity>
                 </Animatable.View>
-            )}
+            )} */}
         </View>
     );
 };

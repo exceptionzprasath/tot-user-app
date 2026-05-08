@@ -13,6 +13,7 @@ import MainNavigator from './src/navigation/MainNavigator';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { FavoritesProvider } from './src/context/FavoritesContext';
 import { CartProvider } from './src/context/CartContext';
+import { LocationProvider } from './src/context/LocationContext';
 import SplashScreen from './src/screens/SplashScreen';
 
 const AppContent = () => {
@@ -41,7 +42,9 @@ function App() {
       <AuthProvider>
         <FavoritesProvider>
           <CartProvider>
-            <AppContent />
+            <LocationProvider>
+              <AppContent />
+            </LocationProvider>
           </CartProvider>
         </FavoritesProvider>
       </AuthProvider>

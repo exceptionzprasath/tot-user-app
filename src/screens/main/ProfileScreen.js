@@ -253,6 +253,11 @@ const ProfileScreen = ({ navigation }) => {
                                 onPress={() => navigation.navigate('Orders')}
                             />
                             <MenuItem
+                                icon="location-outline"
+                                title="Saved Locations"
+                                onPress={() => navigation.navigate('SavedLocations')}
+                            />
+                            <MenuItem
                                 icon="heart-outline"
                                 title="Favorites"
                                 onPress={() => navigation.navigate('Favorites')}

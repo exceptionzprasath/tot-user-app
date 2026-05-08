@@ -18,12 +18,15 @@ import { PermissionsAndroid, ActivityIndicator } from 'react-native';
 import { COLORS, SIZES, SHADOWS } from '../../utils/colors';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
+import { useLocation } from '../../context/LocationContext';
 import api from '../../services/api';
+import { ScrollView } from 'react-native-gesture-handler';
 
 const STATUSBAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight : 0;
 
 const CartScreen = ({ navigation }) => {
     const { cart, addToCart, removeFromCart, clearCart, getCartTotal, getCartCount } = useCart();
+    const { savedLocations } = useLocation();
     const { user } = useAuth();
     const cartItems = Object.values(cart);
 
@@ -249,6 +252,37 @@ const CartScreen = ({ navigation }) => {
                                         </Text>
                                     </View>
                                 </View>
+
+                                {savedLocations.length > 0 && (
+                                    <View style={styles.savedLocationsSelection}>
+                                        <Text style={styles.savedLocationsTitle}>Deliver to saved location:</Text>
+                                        <View style={styles.savedLocationsList}>
+                                            {savedLocations.map((loc) => (
+                                                <TouchableOpacity 
+                                                    key={loc.id} 
+                                                    style={[
+                                                        styles.savedLocationChip,
+                                                        readableAddress === loc.address && styles.savedLocationChipActive
+                                                    ]}
+                                                    onPress={() => {
+                                                        setReadableAddress(loc.address);
+                                                        setLocationData({ latitude: loc.latitude, longitude: loc.longitude });
+                                                    }}
+                                                >
+                                                    <Icon 
+                                                        name={loc.label.toLowerCase() === 'home' ? 'home' : loc.label.toLowerCase() === 'work' ? 'briefcase' : 'location'} 
+                                                        size={14} 
+                                                        color={readableAddress === loc.address ? COLORS.white : COLORS.primary} 
+                                                    />
+                                                    <Text style={[
+                                                        styles.savedLocationChipText,
+                                                        readableAddress === loc.address && styles.savedLocationChipTextActive
+                                                    ]}>{loc.label}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+                                )}
                             </View>
 
                             <View style={styles.confirmFooter}>
@@ -624,6 +658,46 @@ const styles = StyleSheet.create({
         color: COLORS.white,
         fontSize: SIZES.large,
         fontWeight: '700',
+    },
+    savedLocationsSelection: {
+        marginTop: 10,
+        paddingTop: 15,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.lightGray,
+    },
+    savedLocationsTitle: {
+        fontSize: SIZES.small,
+        fontWeight: '600',
+        color: COLORS.textSecondary,
+        marginBottom: 10,
+    },
+    savedLocationsList: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    savedLocationChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.primary + '15',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        gap: 6,
+        borderWidth: 1,
+        borderColor: COLORS.primary + '30',
+    },
+    savedLocationChipActive: {
+        backgroundColor: COLORS.primary,
+        borderColor: COLORS.primary,
+    },
+    savedLocationChipText: {
+        fontSize: SIZES.small,
+        fontWeight: '600',
+        color: COLORS.primary,
+    },
+    savedLocationChipTextActive: {
+        color: COLORS.white,
     },
 });
 

@@ -12,6 +12,7 @@ import ProfileScreen from '../screens/main/ProfileScreen';
 import TrackOrderScreen from '../screens/main/TrackOrderScreen';
 import FavoritesScreen from '../screens/main/FavoritesScreen';
 import CartScreen from '../screens/main/CartScreen';
+import SavedLocationsScreen from '../screens/main/SavedLocationsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -24,6 +25,7 @@ const ProfileStack = createStackNavigator();
 const ProfileStackNavigator = () => (
     <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
         <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
+        <ProfileStack.Screen name="SavedLocations" component={SavedLocationsScreen} />
         <ProfileStack.Screen name="TermsPrivacy" component={TermsPrivacyScreen} />
     </ProfileStack.Navigator>
 );

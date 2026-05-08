@@ -13,7 +13,7 @@ import { COLORS, SIZES, SHADOWS } from '../utils/colors';
 const { width } = Dimensions.get('window');
 const cardWidth = (width - SIZES.padding * 2 - SIZES.paddingS) / 2;
 
-const ProductCard = ({ item, onAddToCart, quantity = 0, isFavorite, onToggleFavorite, layout = 'grid' }) => {
+const ProductCard = ({ item, onAddToCart, onRemoveFromCart, quantity = 0, isFavorite, onToggleFavorite, layout = 'grid' }) => {
     const isList = layout === 'list';
 
     return (
@@ -54,6 +54,11 @@ const ProductCard = ({ item, onAddToCart, quantity = 0, isFavorite, onToggleFavo
 
                     {quantity > 0 ? (
                         <View style={styles.quantityContainer}>
+                            <TouchableOpacity
+                                style={styles.removeButton}
+                                onPress={onRemoveFromCart}>
+                                <Icon name="remove" size={16} color={COLORS.primary} />
+                            </TouchableOpacity>
                             <Text style={styles.quantityText}>{quantity}</Text>
                             <TouchableOpacity
                                 style={styles.addMoreButton}
@@ -177,6 +182,16 @@ const styles = StyleSheet.create({
         height: 28,
         borderRadius: 14,
         backgroundColor: COLORS.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    removeButton: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: COLORS.white,
+        borderWidth: 1,
+        borderColor: COLORS.primary,
         justifyContent: 'center',
         alignItems: 'center',
     },
