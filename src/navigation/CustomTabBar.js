@@ -22,7 +22,9 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
     const [animStep, setAnimStep] = React.useState(1);
 
     // Total height includes the bottom safe area/button navigation height
-    const totalHeight = BASE_TAB_BAR_HEIGHT + insets.bottom;
+    // Added extra padding for 3-button navigation support
+    const extraBottom = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 15 : 0);
+    const totalHeight = BASE_TAB_BAR_HEIGHT + extraBottom;
 
     return (
         <View style={[styles.container, { height: totalHeight }]}>
@@ -42,7 +44,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                 </Svg>
             </View>
 
-            <View style={[styles.tabsWrapper, { height: BASE_TAB_BAR_HEIGHT, paddingBottom: 0 }]}>
+            <View style={[styles.tabsWrapper, { height: totalHeight, paddingBottom: extraBottom }]}>
                 {state.routes.map((route, index) => {
                     const { options } = descriptors[route.key];
                     const isFocused = state.index === index;

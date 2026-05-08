@@ -230,7 +230,7 @@ const MenuScreen = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearchVisible, setIsSearchVisible] = useState(false);
-    const [isGridView, setIsGridView] = useState(true);
+    const [isGridView, setIsGridView] = useState(false);
     const [currentLocation, setCurrentLocation] = useState('Fetching location...');
     const [isLocating, setIsLocating] = useState(false);
     const { isFavorite, toggleFavorite } = useFavorites();
