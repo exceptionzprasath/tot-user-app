@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "793044902076",
+    "project_id": "thambiorutea-15200",
+    "storage_bucket": "thambiorutea-15200.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:793044902076:android:0f9b8f543aee0a241db0b9",
+        "android_client_info": {
+          "package_name": "com.thambiorutea2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCLbHAX_OPGjH_tIi_bZVkPizS_evx1iJc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
