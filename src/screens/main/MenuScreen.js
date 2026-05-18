@@ -477,7 +477,7 @@ const MenuScreen = ({ navigation }) => {
                         keyExtractor={(item) => item.id}
                         numColumns={isGridView ? 2 : 1}
                         columnWrapperStyle={isGridView ? styles.row : null}
-                        contentContainerStyle={filteredItems.length === 0 ? styles.emptyListContent : styles.listContent}
+                        contentContainerStyle={filteredItems.length === 0 ? styles.emptyListContent : [styles.listContent, getCartCount() > 0 && { paddingBottom: 180 }]}
                         ListHeaderComponent={renderListHeader}
                         ListEmptyComponent={renderEmpty}
                         renderItem={({ item, index }) => (
@@ -502,7 +502,7 @@ const MenuScreen = ({ navigation }) => {
             )}
 
             {/* Cart Summary commented out as requested */}
-            {/* {getCartCount() > 0 && (
+            {getCartCount() > 0 && (
                 <Animatable.View animation="slideInUp" duration={300} style={styles.cartSummary}>
                     <View style={styles.cartInfo}>
                         <View style={styles.cartBadge}>
@@ -521,7 +521,7 @@ const MenuScreen = ({ navigation }) => {
                         <Icon name="arrow-forward" size={16} color={COLORS.white} />
                     </TouchableOpacity>
                 </Animatable.View>
-            )} */}
+            )}
         </View>
     );
 };

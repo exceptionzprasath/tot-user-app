@@ -191,8 +191,8 @@ const ProfileScreen = ({ navigation }) => {
                             </View>
                             {isEditing ? (
                                 <View style={styles.editActions}>
-                                    <TouchableOpacity 
-                                        style={[styles.actionBtn, styles.saveBtn]} 
+                                    <TouchableOpacity
+                                        style={[styles.actionBtn, styles.saveBtn]}
                                         onPress={saveProfile}
                                         disabled={isSaving}
                                     >
@@ -202,8 +202,8 @@ const ProfileScreen = ({ navigation }) => {
                                             <Icon name="checkmark" size={20} color={COLORS.white} />
                                         )}
                                     </TouchableOpacity>
-                                    <TouchableOpacity 
-                                        style={[styles.actionBtn, styles.cancelBtn]} 
+                                    <TouchableOpacity
+                                        style={[styles.actionBtn, styles.cancelBtn]}
                                         onPress={() => setIsEditing(false)}
                                         disabled={isSaving}
                                     >
@@ -211,8 +211,8 @@ const ProfileScreen = ({ navigation }) => {
                                     </TouchableOpacity>
                                 </View>
                             ) : (
-                                <TouchableOpacity 
-                                    style={styles.editButton} 
+                                <TouchableOpacity
+                                    style={styles.editButton}
                                     onPress={() => setIsEditing(true)}
                                 >
                                     <Icon name="create-outline" size={18} color={COLORS.primary} />
@@ -269,7 +269,7 @@ const ProfileScreen = ({ navigation }) => {
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>Settings</Text>
                         <View style={styles.menuContainer}>
-                            <MenuItem
+                            {/* <MenuItem
                                 icon="notifications-outline"
                                 title="Notifications"
                                 showBorder={false}
@@ -281,7 +281,7 @@ const ProfileScreen = ({ navigation }) => {
                                         thumbColor={notificationsEnabled ? COLORS.primary : COLORS.gray}
                                     />
                                 }
-                            />
+                            /> */}
                             <MenuItem
                                 icon="help-circle-outline"
                                 title="Help & Support"

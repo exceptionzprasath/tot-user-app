@@ -21,6 +21,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLocation } from '../../context/LocationContext';
 import api from '../../services/api';
 import { ScrollView } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const STATUSBAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight : 0;
 
@@ -28,6 +29,8 @@ const CartScreen = ({ navigation }) => {
     const { cart, addToCart, removeFromCart, clearCart, getCartTotal, getCartCount } = useCart();
     const { savedLocations } = useLocation();
     const { user } = useAuth();
+    const insets = useSafeAreaInsets();
+    const extraBottom = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 15 : 0);
     const cartItems = Object.values(cart);
 
     // Ordering States
@@ -338,7 +341,11 @@ const CartScreen = ({ navigation }) => {
                     />
 
                     {/* Footer / Summary */}
-                    <Animatable.View animation="slideInUp" duration={400} style={styles.footer}>
+                    <Animatable.View 
+                        animation="slideInUp" 
+                        duration={400} 
+                        style={[styles.footer, { paddingBottom: Platform.OS === 'ios' ? 40 : SIZES.padding + extraBottom }]}
+                    >
                         <View style={styles.summaryRow}>
                             <Text style={styles.summaryLabel}>Items ({getCartCount()})</Text>
                             <Text style={styles.summaryValue}>₹{getCartTotal()}</Text>

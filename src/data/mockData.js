@@ -40,7 +40,7 @@ export const MOCK_MENU = [
         name: 'Flask Tea',
         category: 'tea',
         price: 120,
-        image: 'https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?auto=format&fit=crop&q=80&w=800',
+        image: 'https://www.suranasons.in/cdn/shop/files/Untitled_design_2_92a180c0-b482-42cb-b8bd-93bb697afc2d.png?v=1725386672&width=1445',
         description: 'Serves 10 tea',
         available: true,
     },
