@@ -64,7 +64,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                     let iconName;
                     switch (route.name) {
                         case 'Menu': iconName = isFocused ? 'home' : 'home-outline'; break;
-                        case 'Favorites': iconName = isFocused ? 'heart' : 'heart-outline'; break;
+                        case 'Games': iconName = isFocused ? 'game-controller' : 'game-controller-outline'; break;
                         case 'Orders': iconName = isFocused ? 'receipt' : 'receipt-outline'; break;
                         case 'Profile': iconName = isFocused ? 'person' : 'person-outline'; break;
                         default: iconName = 'help-outline';

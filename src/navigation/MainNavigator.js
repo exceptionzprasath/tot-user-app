@@ -10,7 +10,7 @@ import MenuScreen from '../screens/main/MenuScreen';
 import OrdersScreen from '../screens/main/OrdersScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import TrackOrderScreen from '../screens/main/TrackOrderScreen';
-import FavoritesScreen from '../screens/main/FavoritesScreen';
+import GamesScreen from '../screens/main/GamesScreen';
 import CartScreen from '../screens/main/CartScreen';
 import SavedLocationsScreen from '../screens/main/SavedLocationsScreen';
 
@@ -21,12 +21,14 @@ import CustomTabBar from './CustomTabBar';
 import TermsPrivacyScreen from '../screens/main/TermsPrivacyScreen';
 
 const ProfileStack = createStackNavigator();
+import FavoritesScreen from '../screens/main/FavoritesScreen';
 
 const ProfileStackNavigator = () => (
     <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
         <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
         <ProfileStack.Screen name="SavedLocations" component={SavedLocationsScreen} />
         <ProfileStack.Screen name="TermsPrivacy" component={TermsPrivacyScreen} />
+        <ProfileStack.Screen name="Favorites" component={FavoritesScreen} />
     </ProfileStack.Navigator>
 );
 
@@ -47,9 +49,9 @@ const MainTabs = () => {
                 options={{ tabBarLabel: 'Home' }}
             />
             <Tab.Screen
-                name="Favorites"
-                component={FavoritesScreen}
-                options={{ tabBarLabel: 'Favorites' }}
+                name="Games"
+                component={GamesScreen}
+                options={{ tabBarLabel: 'Games' }}
             />
             <Tab.Screen
                 name="Orders"
