@@ -12,6 +12,7 @@ import {
     TextInput,
     TouchableOpacity,
     SafeAreaView,
+    Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import * as Animatable from 'react-native-animatable';
@@ -62,20 +63,21 @@ const LoginScreen = ({ navigation }) => {
         setLoading(true);
 
         try {
-            // Step 1: Check if user exists
+            // Step 1: Check if user exists in DynamoDB
             const checkResult = await checkPhone(fullPhone);
 
             if (checkResult.success) {
                 if (checkResult.exists) {
-                    // Step 2a: If user exists, send OTP and go to OTP screen
-                    const otpResult = await sendOTP(fullPhone);
-                    if (otpResult.success) {
-                        navigation.navigate('OTP', { phoneNumber: fullPhone });
-                    } else {
-                        setError('Failed to send OTP. Please try again.');
-                    }
+                    // TEMPORARY BYPASS: Generate random OTP and proceed to OTP screen
+                    // const response = await sendOTP(fullPhone); // Commented out Firebase
+                    const mockOtp = Math.floor(100000 + Math.random() * 900000).toString();
+                    Alert.alert(
+                        'OTP Sent',
+                        `Your OTP is: ${mockOtp}`
+                    );
+                    navigation.navigate('OTP', { phoneNumber: fullPhone, mockOtp });
                 } else {
-                    // Step 2b: If user doesn't exist, go to Register screen
+                    // Step 2b: New user — go to Register screen
                     navigation.navigate('Register', { phoneNumber: fullPhone });
                 }
             } else {
@@ -83,11 +85,12 @@ const LoginScreen = ({ navigation }) => {
             }
         } catch (err) {
             console.error('Login error:', err);
-            setError('Connection error. Please check if backend is running.');
+            setError('Login failed. Please try again.');
         } finally {
             setLoading(false);
         }
     };
+
 
     return (
         <View style={styles.container}>

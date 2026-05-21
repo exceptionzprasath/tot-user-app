@@ -45,8 +45,11 @@ const RegisterScreen = ({ navigation, route }) => {
                     { 
                         text: 'Continue', 
                         onPress: async () => {
-                            await sendOTP(phoneNumber);
-                            navigation.replace('OTP', { phoneNumber });
+                            // TEMPORARY BYPASS: Generate random OTP and proceed to OTP screen
+                            // await sendOTP(phoneNumber); // Commented out Firebase
+                            const mockOtp = Math.floor(100000 + Math.random() * 900000).toString();
+                            Alert.alert('OTP Sent', `Your OTP is: ${mockOtp}`);
+                            navigation.replace('OTP', { phoneNumber, mockOtp });
                         } 
                     }
                 ]);

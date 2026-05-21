@@ -15,6 +15,7 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import * as Animatable from 'react-native-animatable';
 import { COLORS, SIZES, SHADOWS } from '../../utils/colors';
+import { listenToOrder } from '../../config/firestore';
 import api from '../../services/api';
 
 const { width, height } = Dimensions.get('window');
@@ -43,19 +44,17 @@ const TrackOrderScreen = ({ route, navigation }) => {
     ];
 
     useEffect(() => {
-        const fetchOrderStatus = async () => {
-            try {
-                const response = await api.get(`/orders/${order.id}`);
-                if (response.data.success) {
-                    setOrder(response.data.data);
-                }
-            } catch (error) {
-                console.error('Polling error:', error);
-            }
-        };
+        // Firestore real-time listener for this specific order
+        const unsubscribe = listenToOrder(
+            order.id,
+            (updatedOrder) => {
+                console.log('TrackOrder updated via Firestore:', updatedOrder.status);
+                setOrder(updatedOrder);
+            },
+            (error) => console.error('Firestore order listen error:', error)
+        );
 
-        const interval = setInterval(fetchOrderStatus, 5000); // Poll every 5 seconds
-        return () => clearInterval(interval);
+        return () => unsubscribe();
     }, [order.id]);
 
     const handleCall = (phone) => {

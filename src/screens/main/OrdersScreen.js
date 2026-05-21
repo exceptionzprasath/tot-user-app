@@ -14,6 +14,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import * as Animatable from 'react-native-animatable';
 import { COLORS, SIZES, SHADOWS } from '../../utils/colors';
 import { useAuth } from '../../context/AuthContext';
+import { listenToCustomerOrders } from '../../config/firestore';
 import api from '../../services/api';
 
 const STATUSBAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight : 0;
@@ -49,15 +50,34 @@ const OrdersScreen = ({ navigation }) => {
     }, [user?.phone]);
 
     useEffect(() => {
-        fetchOrders();
-        
-        // Refresh when screen comes into focus
-        const unsubscribe = navigation.addListener('focus', () => {
-            fetchOrders();
-        });
+        if (!user?.phone) {
+            setLoading(false);
+            return;
+        }
 
-        return unsubscribe;
-    }, [fetchOrders, navigation]);
+        setLoading(true);
+
+        // Firestore real-time listener for customer orders
+        const unsubscribe = listenToCustomerOrders(
+            user.phone,
+            (fetchedOrders) => {
+                setOrders(fetchedOrders);
+                setLoading(false);
+            },
+            (error) => {
+                console.error('Firestore orders error:', error);
+                setLoading(false);
+            }
+        );
+
+        // Also refresh when screen comes into focus (keeps filter tabs in sync)
+        const unsubscribeFocus = navigation.addListener('focus', () => {});
+
+        return () => {
+            unsubscribe();
+            unsubscribeFocus();
+        };
+    }, [user?.phone, navigation]);
 
     const onRefresh = () => {
         fetchOrders(true);

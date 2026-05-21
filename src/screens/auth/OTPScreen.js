@@ -25,12 +25,14 @@ const { width, height } = Dimensions.get('window');
 const OTPScreen = ({ route, navigation }) => {
     const { login } = useAuth();
     const { phoneNumber } = route.params;
-    const [otp, setOtp] = useState(['', '', '', '']);
+    const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [loading, setLoading] = useState(false);
     const [timer, setTimer] = useState(30);
     const [canResend, setCanResend] = useState(false);
 
     const inputRefs = [
+        useRef(null),
+        useRef(null),
         useRef(null),
         useRef(null),
         useRef(null),
@@ -59,13 +61,13 @@ const OTPScreen = ({ route, navigation }) => {
         newOtp[index] = value;
         setOtp(newOtp);
 
-        if (value && index < 3) {
+        if (value && index < 5) {
             inputRefs[index + 1].current?.focus();
         }
 
-        if (index === 3 && value) {
+        if (index === 5 && value) {
             const otpString = newOtp.join('');
-            if (otpString.length === 4) {
+            if (otpString.length === 6) {
                 handleVerifyOTP(otpString);
             }
         }
@@ -78,27 +80,33 @@ const OTPScreen = ({ route, navigation }) => {
     };
 
     const handleVerifyOTP = async (otpString = otp.join('')) => {
-        if (otpString.length !== 4) {
-            Alert.alert('Error', 'Please enter complete OTP');
+        if (otpString.length !== 6) {
+            Alert.alert('Error', 'Please enter the complete 6-digit OTP');
             return;
         }
 
         setLoading(true);
 
         try {
-            const response = await verifyOTP(phoneNumber, otpString);
+            // Check mock OTP if bypass is active
+            if (route.params?.mockOtp && otpString !== route.params.mockOtp) {
+                throw new Error('Invalid temporary OTP');
+            }
+
+            // authService verifyOTP handles the backend call automatically
+            const response = await verifyOTP(otpString, phoneNumber);
 
             if (response.success) {
-                await login(response.user || { phone: phoneNumber, token: response.token });
+                await login(response.user || { phone: phoneNumber });
             } else {
-                Alert.alert('Error', response.message || 'Invalid OTP');
-                setOtp(['', '', '', '']);
+                Alert.alert('Error', response.message || 'Verification failed');
+                setOtp(['', '', '', '', '', '']);
                 inputRefs[0].current?.focus();
             }
         } catch (err) {
             console.error('Verify OTP error:', err);
-            Alert.alert('Error', 'Failed to verify OTP. Please try again.');
-            setOtp(['', '', '', '']);
+            Alert.alert('Invalid OTP', err.message || 'The OTP you entered is incorrect. Please try again.');
+            setOtp(['', '', '', '', '', '']);
             inputRefs[0].current?.focus();
         } finally {
             setLoading(false);
@@ -108,16 +116,18 @@ const OTPScreen = ({ route, navigation }) => {
     const handleResendOTP = async () => {
         setLoading(true);
         try {
-            const response = await sendOTP(phoneNumber);
-            if (response.success) {
-                setOtp(['', '', '', '']);
-                setTimer(30);
-                setCanResend(false);
-                inputRefs[0].current?.focus();
-                Alert.alert('OTP Resent', `New OTP sent to ${phoneNumber}`);
-            }
+            // TEMPORARY BYPASS: Generate new mock OTP instead of Firebase
+            // await sendOTP(phoneNumber);
+            const newMockOtp = Math.floor(100000 + Math.random() * 900000).toString();
+            navigation.setParams({ mockOtp: newMockOtp });
+            
+            setOtp(['', '', '', '', '', '']);
+            setTimer(30);
+            setCanResend(false);
+            inputRefs[0].current?.focus();
+            Alert.alert('OTP Resent', `Your new OTP is: ${newMockOtp}`);
         } catch (err) {
-            Alert.alert('Error', 'Failed to resend OTP');
+            Alert.alert('Error', 'Failed to resend OTP. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -137,7 +147,8 @@ const OTPScreen = ({ route, navigation }) => {
                 <SafeAreaView style={styles.content}>
                     <TouchableOpacity
                         style={styles.backButton}
-                        onPress={() => navigation.goBack()}>
+                        onPress={() => navigation.goBack()}
+                    >
                         <Icon name="arrow-back" size={24} color={COLORS.white} />
                     </TouchableOpacity>
 
@@ -145,15 +156,25 @@ const OTPScreen = ({ route, navigation }) => {
                         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                         style={styles.flexCenter}
                     >
-                        <Animatable.View animation="fadeInDown" style={styles.headerContent}>
+                        <Animatable.View
+                            animation="fadeInDown"
+                            duration={800}
+                            style={styles.headerContent}>
                             <View style={styles.iconContainer}>
                                 <Icon name="shield-checkmark" size={40} color={COLORS.white} />
                             </View>
                             <Text style={styles.heroTitle}>Verification</Text>
                             <Text style={styles.heroSubtitle}>
-                                Enter the 4-digit code sent to
+                                Enter the 6-digit code sent to
                             </Text>
                             <Text style={styles.phoneNumberText}>{phoneNumber}</Text>
+
+                            {/* MOCK OTP DISPLAY */}
+                            {route.params?.mockOtp && (
+                                <Text style={{ color: 'red', marginTop: 10, fontSize: 16, fontWeight: 'bold' }}>
+                                    Your OTP is: {route.params.mockOtp}
+                                </Text>
+                            )}
                         </Animatable.View>
 
 
@@ -302,16 +323,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'center',
         marginBottom: 40,
-        gap: 15,
+        gap: 8,
     },
     otpInput: {
-        width: 65,
-        height: 65,
+        width: 48,
+        height: 55,
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.3)',
-        borderRadius: 15,
+        borderRadius: 12,
         textAlign: 'center',
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: 'bold',
         color: COLORS.white,
         backgroundColor: 'rgba(255, 255, 255, 0.1)',

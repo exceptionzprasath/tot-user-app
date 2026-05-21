@@ -1,6 +1,7 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
+apply plugin: "com.google.gms.google-services"
 
 // React Native Vector Icons configuration
 apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")
@@ -85,8 +86,8 @@ android {
         applicationId "com.thambiorutea2"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "1.2"
+        versionCode 6
+        versionName "1.5"
     }
     signingConfigs {
         debug {
@@ -126,4 +127,9 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // Firebase BOM - manages all Firebase library versions
+    implementation platform('com.google.firebase:firebase-bom:33.0.0')
+    // Firebase Phone Auth
+    implementation 'com.google.firebase:firebase-auth'
 }
