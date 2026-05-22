@@ -129,6 +129,11 @@ const CartScreen = ({ navigation }) => {
                 totalAmount: getCartTotal(),
                 deliveryAddress: readableAddress,
                 locationCoords: locationData,
+                customerLocation: {
+                    latitude: locationData.latitude,
+                    longitude: locationData.longitude,
+                    address: readableAddress
+                },
                 customerName: user?.name,
                 customerPhone: user?.phone,
             };
