@@ -9,6 +9,7 @@ import {
     StatusBar,
     Platform,
     Alert,
+    Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import * as Animatable from 'react-native-animatable';
@@ -20,6 +21,7 @@ import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLocation } from '../../context/LocationContext';
 import api from '../../services/api';
+import { listenToOrder } from '../../config/firestore';
 import { ScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -39,6 +41,79 @@ const CartScreen = ({ navigation }) => {
     const [locationData, setLocationData] = React.useState(null);
     const [readableAddress, setReadableAddress] = React.useState('');
     const [isFetchingInfo, setIsFetchingInfo] = React.useState(false);
+
+    // Razorpay / Payment States
+    const [pendingOrderId, setPendingOrderId] = React.useState(null);
+    const [paymentStatus, setPaymentStatus] = React.useState('none'); // 'none' | 'initiating' | 'waiting' | 'failed'
+    const [checkoutUrl, setCheckoutUrl] = React.useState('');
+
+    // Real-time Firestore event listener for payment success
+    React.useEffect(() => {
+        if (!pendingOrderId) return;
+        
+        console.log('🔥 [Firestore] Listening to order for payment verification:', pendingOrderId);
+        const unsubscribe = listenToOrder(
+            pendingOrderId,
+            (updatedOrder) => {
+                if (updatedOrder && updatedOrder.status === 'placed') {
+                    console.log('💳 [Firestore] Payment verified in app for order:', pendingOrderId);
+                    clearCart();
+                    setIsOrdering(false);
+                    setPendingOrderId(null);
+                    setPaymentStatus('none');
+                    navigation.navigate('TrackOrder', { order: updatedOrder });
+                }
+            },
+            (error) => console.error('Firestore order payment listen error:', error)
+        );
+
+        return () => {
+            if (unsubscribe) unsubscribe();
+        };
+    }, [pendingOrderId]);
+
+    // Handle deep link redirect back to app
+    React.useEffect(() => {
+        const handleDeepLink = async (event) => {
+            const url = event.url;
+            console.log('🔗 [Deep Link] App opened with url:', url);
+            if (url && url.includes('payment-success')) {
+                const urlParts = url.split('?');
+                if (urlParts.length > 1) {
+                    const params = urlParts[1].split('&');
+                    const orderIdParam = params.find(p => p.startsWith('orderId='));
+                    if (orderIdParam) {
+                        const orderId = orderIdParam.split('=')[1];
+                        if (orderId === pendingOrderId) {
+                            console.log('💳 [Deep Link] Payment successful for order:', orderId);
+                            try {
+                                const response = await api.get(`/orders/${orderId}`);
+                                if (response.data.success) {
+                                    clearCart();
+                                    setIsOrdering(false);
+                                    setPendingOrderId(null);
+                                    setPaymentStatus('none');
+                                    navigation.navigate('TrackOrder', { order: response.data.data });
+                                }
+                            } catch (err) {
+                                console.error('Error fetching order after deep link:', err);
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        const subscription = Linking.addEventListener('url', handleDeepLink);
+        
+        Linking.getInitialURL().then((url) => {
+            if (url) handleDeepLink({ url });
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, [pendingOrderId]);
 
     const requestLocationPermission = async () => {
         if (Platform.OS === 'ios') {
@@ -121,6 +196,7 @@ const CartScreen = ({ navigation }) => {
     const finalizeOrder = async () => {
         if (isFetchingInfo) return;
         setIsFetchingInfo(true);
+        setPaymentStatus('initiating');
 
         try {
             const orderData = {
@@ -140,15 +216,21 @@ const CartScreen = ({ navigation }) => {
 
             const response = await api.post('/orders', orderData);
 
-            if (response.data.success) {
-                clearCart();
-                setIsOrdering(false);
-                navigation.navigate('TrackOrder', { order: response.data.order });
+            if (response.data.success && response.data.pendingPayment) {
+                const { orderId, checkoutUrl: url } = response.data;
+                setPendingOrderId(orderId);
+                setCheckoutUrl(url);
+                setPaymentStatus('waiting');
+                
+                // Open the checkout page in the mobile browser
+                Linking.openURL(url);
             } else {
-                Alert.alert('Error', response.data.message || 'Failed to place order');
+                setPaymentStatus('none');
+                Alert.alert('Error', response.data.message || 'Failed to initiate payment');
             }
         } catch (error) {
             console.error('Finalize Order Error:', error);
+            setPaymentStatus('none');
             Alert.alert('Error', 'Connection failed. Please try again.');
         } finally {
             setIsFetchingInfo(false);
@@ -209,7 +291,81 @@ const CartScreen = ({ navigation }) => {
             <View style={styles.overlayContainer}>
                 <StatusBar barStyle="dark-content" backgroundColor="rgba(0,0,0,0.5)" />
                 <Animatable.View animation="zoomIn" duration={300} style={styles.modalContent}>
-                    {orderStep === 'fetching' ? (
+                    {paymentStatus !== 'none' ? (
+                        <View style={styles.fetchingContainer}>
+                            {paymentStatus === 'initiating' ? (
+                                <>
+                                    <ActivityIndicator size="large" color={COLORS.primary} />
+                                    <Text style={[styles.fetchingText, { marginTop: 15 }]}>Initiating secure payment...</Text>
+                                </>
+                            ) : (
+                                <>
+                                    <ActivityIndicator size="large" color={COLORS.primary} />
+                                    <Text style={[styles.fetchingText, { fontSize: SIZES.large, color: COLORS.primary, marginTop: 15 }]}>Awaiting Payment...</Text>
+                                    <Text style={{ color: COLORS.textSecondary, textAlign: 'center', marginHorizontal: 20, marginTop: 10, fontSize: SIZES.small, lineHeight: 18 }}>
+                                        Please complete the payment in the secure browser window that was opened.
+                                    </Text>
+                                    
+                                    <View style={{ width: '100%', gap: 10, marginTop: 25 }}>
+                                        <TouchableOpacity 
+                                            style={styles.confirmButton}
+                                            onPress={() => checkoutUrl && Linking.openURL(checkoutUrl)}
+                                        >
+                                            <Icon name="open-outline" size={18} color={COLORS.white} />
+                                            <Text style={styles.confirmButtonText}>Reopen Payment Page</Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity 
+                                            style={[styles.confirmButton, { backgroundColor: COLORS.success }]}
+                                            onPress={async () => {
+                                                if (pendingOrderId) {
+                                                    setIsFetchingInfo(true);
+                                                    try {
+                                                        const res = await api.get(`/orders/${pendingOrderId}`);
+                                                        if (res.data.success && res.data.data.status === 'placed') {
+                                                            clearCart();
+                                                            setIsOrdering(false);
+                                                            setPendingOrderId(null);
+                                                            setPaymentStatus('none');
+                                                            navigation.navigate('TrackOrder', { order: res.data.data });
+                                                        } else {
+                                                            Alert.alert('Status Check', 'Payment confirmation not received yet. Please try again or complete transaction.');
+                                                        }
+                                                    } catch (err) {
+                                                        Alert.alert('Status Check', 'Could not check order status. Please try again.');
+                                                    } finally {
+                                                        setIsFetchingInfo(false);
+                                                    }
+                                                }
+                                            }}
+                                            disabled={isFetchingInfo}
+                                        >
+                                            {isFetchingInfo ? (
+                                                <ActivityIndicator color={COLORS.white} />
+                                            ) : (
+                                                <>
+                                                    <Icon name="refresh-outline" size={18} color={COLORS.white} />
+                                                    <Text style={styles.confirmButtonText}>Refresh Payment Status</Text>
+                                                </>
+                                            )}
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity 
+                                            style={[styles.confirmButton, { backgroundColor: COLORS.gray, opacity: 0.8 }]}
+                                            onPress={() => {
+                                                setPaymentStatus('none');
+                                                setPendingOrderId(null);
+                                                setIsOrdering(false);
+                                            }}
+                                        >
+                                            <Icon name="close-circle-outline" size={18} color={COLORS.white} />
+                                            <Text style={styles.confirmButtonText}>Cancel Transaction</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </>
+                            )}
+                        </View>
+                    ) : orderStep === 'fetching' ? (
                         <View style={styles.fetchingContainer}>
                             <LottieView
                                 source={require('../../assets/location.json')}
