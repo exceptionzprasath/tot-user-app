@@ -62,6 +62,34 @@ const TrackOrderScreen = ({ route, navigation }) => {
         Linking.openURL(`tel:${phone}`);
     };
 
+    if (order?.status === 'unassigned' || order?.status === 'expired') {
+        return (
+            <SafeAreaView style={styles.apologyContainer}>
+                <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+                <View style={styles.apologyContent}>
+                    <Animatable.View animation="bounceIn" duration={1000} style={styles.apologyIconWrapper}>
+                        <Icon name="sad-outline" size={72} color={COLORS.secondary} />
+                    </Animatable.View>
+                    <Animatable.Text animation="fadeInUp" duration={800} delay={300} style={styles.apologyTitle}>
+                        Thank you for your interest!
+                    </Animatable.Text>
+                    <Animatable.Text animation="fadeInUp" duration={800} delay={500} style={styles.apologySub}>
+                        We are sorry that our riders are busy right now, so thanks for your understanding.
+                    </Animatable.Text>
+                    <Animatable.View animation="fadeInUp" duration={800} delay={700} style={styles.btnWrapper}>
+                        <TouchableOpacity
+                            style={styles.apologyButton}
+                            activeOpacity={0.8}
+                            onPress={() => navigation.navigate('MainTabs', { screen: 'Menu' })}
+                        >
+                            <Text style={styles.apologyButtonText}>Back to Menu</Text>
+                        </TouchableOpacity>
+                    </Animatable.View>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
@@ -463,6 +491,59 @@ const styles = StyleSheet.create({
         fontSize: SIZES.regular,
         color: COLORS.textPrimary,
         lineHeight: 22,
+    },
+    apologyContainer: {
+        flex: 1,
+        backgroundColor: COLORS.white,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    apologyContent: {
+        paddingHorizontal: SIZES.paddingXL,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    apologyIconWrapper: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: COLORS.secondary + '15',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: SIZES.paddingXL,
+    },
+    apologyTitle: {
+        fontSize: SIZES.xxlarge,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+        textAlign: 'center',
+        marginBottom: SIZES.paddingS,
+    },
+    apologySub: {
+        fontSize: SIZES.regular,
+        color: COLORS.textSecondary,
+        textAlign: 'center',
+        lineHeight: 24,
+        marginBottom: SIZES.paddingXL,
+    },
+    btnWrapper: {
+        width: '100%',
+        alignItems: 'center',
+    },
+    apologyButton: {
+        backgroundColor: COLORS.secondary,
+        paddingVertical: 14,
+        paddingHorizontal: SIZES.paddingXL,
+        borderRadius: SIZES.radiusLarge,
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: width * 0.8,
+        ...SHADOWS.medium,
+    },
+    apologyButtonText: {
+        fontSize: SIZES.regular,
+        fontWeight: '700',
+        color: COLORS.textPrimary,
     },
 });
 

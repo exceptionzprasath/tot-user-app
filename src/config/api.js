@@ -1,9 +1,6 @@
-// API Configuration for Thambioru Tea App
-// Backend server URL
+import { API_BASE_URL } from '../services/api';
 
-// Use ngrok URL for testing on physical devices
-// Update this URL when you restart ngrok
-export const API_BASE_URL = 'https://settlo-tot-backend.vercel.app';
+export { API_BASE_URL };
 
 export const API_ENDPOINTS = {
     // Vehicles
