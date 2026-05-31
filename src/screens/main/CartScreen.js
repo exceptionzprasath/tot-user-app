@@ -10,6 +10,7 @@ import {
     Platform,
     Alert,
     Linking,
+    Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import * as Animatable from 'react-native-animatable';
@@ -26,11 +27,25 @@ import { ScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const STATUSBAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight : 0;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Haversine formula to calculate distance in km
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // radius of the Earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+};
 
 const CartScreen = ({ navigation }) => {
     const { cart, addToCart, removeFromCart, clearCart, getCartTotal, getCartCount } = useCart();
     const { savedLocations } = useLocation();
-    const { user } = useAuth();
+    const { user, isFreeTeaEligible } = useAuth();
     const insets = useSafeAreaInsets();
     const extraBottom = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 15 : 0);
     const cartItems = Object.values(cart);
@@ -42,10 +57,38 @@ const CartScreen = ({ navigation }) => {
     const [readableAddress, setReadableAddress] = React.useState('');
     const [isFetchingInfo, setIsFetchingInfo] = React.useState(false);
 
+    // Live Riders Map States
+    const [onlineRiders, setOnlineRiders] = React.useState([]);
+    const [isFetchingRiders, setIsFetchingRiders] = React.useState(false);
+
+    // Poll online riders when overlay is shown
+    React.useEffect(() => {
+        let interval;
+        const fetchRiders = async () => {
+            try {
+                const res = await api.get('/riders/online');
+                if (res.data.success) {
+                    setOnlineRiders(res.data.data || []);
+                }
+            } catch (err) {
+                console.error('Error fetching online riders:', err);
+            }
+        };
+
+        if (isOrdering && orderStep === 'confirm') {
+            fetchRiders();
+            interval = setInterval(fetchRiders, 10000); // Poll every 10s
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [isOrdering, orderStep]);
+
     // Razorpay / Payment States
     const [pendingOrderId, setPendingOrderId] = React.useState(null);
     const [paymentStatus, setPaymentStatus] = React.useState('none'); // 'none' | 'initiating' | 'waiting' | 'failed'
     const [checkoutUrl, setCheckoutUrl] = React.useState('');
+    const [paymentMethod, setPaymentMethod] = React.useState('ONLINE'); // 'ONLINE' | 'COD'
 
     // Real-time Firestore event listener for payment success
     React.useEffect(() => {
@@ -212,21 +255,30 @@ const CartScreen = ({ navigation }) => {
                 },
                 customerName: user?.name,
                 customerPhone: user?.phone,
+                paymentMethod: paymentMethod, // 'ONLINE' or 'COD'
             };
 
             const response = await api.post('/orders', orderData);
 
-            if (response.data.success && response.data.pendingPayment) {
-                const { orderId, checkoutUrl: url } = response.data;
-                setPendingOrderId(orderId);
-                setCheckoutUrl(url);
-                setPaymentStatus('waiting');
-                
-                // Open the checkout page in the mobile browser
-                Linking.openURL(url);
+            if (response.data.success) {
+                if (response.data.pendingPayment) {
+                    const { orderId, checkoutUrl: url } = response.data;
+                    setPendingOrderId(orderId);
+                    setCheckoutUrl(url);
+                    setPaymentStatus('waiting');
+                    
+                    // Open the checkout page in the mobile browser
+                    Linking.openURL(url);
+                } else {
+                    // COD order placed successfully!
+                    clearCart();
+                    setIsOrdering(false);
+                    setPaymentStatus('none');
+                    navigation.navigate('TrackOrder', { order: response.data.order || response.data.data });
+                }
             } else {
                 setPaymentStatus('none');
-                Alert.alert('Error', response.data.message || 'Failed to initiate payment');
+                Alert.alert('Error', response.data.message || 'Failed to place order');
             }
         } catch (error) {
             console.error('Finalize Order Error:', error);
@@ -237,37 +289,54 @@ const CartScreen = ({ navigation }) => {
         }
     };
 
-    const renderCartItem = ({ item, index }) => (
-        <Animatable.View animation="fadeInRight" delay={index * 100} style={styles.cartItem}>
-            <Image source={{ uri: item.image }} style={styles.itemImage} />
-            <View style={styles.itemInfo}>
-                <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemPrice}>₹{item.price}</Text>
-                <View style={styles.quantityContainer}>
-                    <TouchableOpacity
-                        style={styles.qtyButton}
-                        onPress={() => removeFromCart(item.id)}>
-                        <Icon name="remove" size={18} color={COLORS.primary} />
-                    </TouchableOpacity>
-                    <Text style={styles.quantity}>{item.quantity}</Text>
-                    <TouchableOpacity
-                        style={styles.qtyButton}
-                        onPress={() => addToCart(item)}>
-                        <Icon name="add" size={18} color={COLORS.primary} />
-                    </TouchableOpacity>
+    const renderCartItem = ({ item, index }) => {
+        const isFreeTea = isFreeTeaEligible && item.id === 'item_001';
+        const displayTotal = isFreeTea 
+            ? Math.max(0, item.price * (item.quantity - 1))
+            : item.price * item.quantity;
+
+        return (
+            <Animatable.View animation="fadeInRight" delay={index * 100} style={styles.cartItem}>
+                <Image source={{ uri: item.image }} style={styles.itemImage} />
+                <View style={styles.itemInfo}>
+                    <Text style={styles.itemName}>{item.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.itemPrice}>₹{item.price}</Text>
+                        {isFreeTea && (
+                            <View style={{ backgroundColor: '#E8F5E9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                <Text style={{ color: '#2E7D32', fontSize: 9, fontWeight: '700' }}>1 cup FREE</Text>
+                            </View>
+                        )}
+                    </View>
+                    <View style={styles.quantityContainer}>
+                        <TouchableOpacity
+                            style={styles.qtyButton}
+                            onPress={() => removeFromCart(item.id)}>
+                            <Icon name="remove" size={18} color={COLORS.primary} />
+                        </TouchableOpacity>
+                        <Text style={styles.quantity}>{item.quantity}</Text>
+                        <TouchableOpacity
+                            style={styles.qtyButton}
+                            onPress={() => addToCart(item)}>
+                            <Icon name="add" size={18} color={COLORS.primary} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
-            </View>
-            <View style={styles.itemRight}>
-                <Text style={styles.itemTotal}>₹{item.price * item.quantity}</Text>
-                <TouchableOpacity onPress={() => {
-                    // Logic to fully remove item if needed, but removeFromCart(id) 
-                    // handles decrementing. Let's add a clear item function to context later
-                    // For now, let's just use the decrement
-                }}>
-                </TouchableOpacity>
-            </View>
-        </Animatable.View>
-    );
+                <View style={styles.itemRight}>
+                    {isFreeTea && item.quantity === 1 ? (
+                        <Text style={[styles.itemTotal, { color: '#2E7D32' }]}>FREE</Text>
+                    ) : (
+                        <View style={{ alignItems: 'flex-end' }}>
+                            {isFreeTea && (
+                                <Text style={{ fontSize: 10, color: COLORS.mediumGray, textDecorationLine: 'line-through' }}>₹{item.price * item.quantity}</Text>
+                            )}
+                            <Text style={styles.itemTotal}>₹{displayTotal}</Text>
+                        </View>
+                    )}
+                </View>
+            </Animatable.View>
+        );
+    };
 
     const renderEmptyCart = () => (
         <View style={styles.emptyContainer}>
@@ -390,81 +459,332 @@ const CartScreen = ({ navigation }) => {
                                 </TouchableOpacity>
                             </View>
 
-                            <View style={styles.detailsList}>
-                                <View style={styles.detailItem}>
-                                    <Icon name="person-outline" size={20} color={COLORS.primary} />
-                                    <View style={styles.detailTextContainer}>
-                                        <Text style={styles.detailLabel}>Name</Text>
-                                        <Text style={styles.detailValue}>{user?.name || 'Guest User'}</Text>
-                                    </View>
-                                </View>
+                            {/* Filter riders within 5km radius */}
+                            {(() => {
+                                const nearbyRiders = onlineRiders.filter(r => {
+                                    if (!locationData || !r.lat || !r.lng) return false;
+                                    const d = calculateDistance(locationData.latitude, locationData.longitude, r.lat, r.lng);
+                                    return d <= 5.0;
+                                });
 
-                                <View style={styles.detailItem}>
-                                    <Icon name="call-outline" size={20} color={COLORS.primary} />
-                                    <View style={styles.detailTextContainer}>
-                                        <Text style={styles.detailLabel}>Phone</Text>
-                                        <Text style={styles.detailValue}>{user?.phone || 'Not available'}</Text>
-                                    </View>
-                                </View>
+                                const GOOGLE_MAPS_API_KEY = 'AIzaSyBO86Y_HqbJDWjCfBljLC72qiazTSk4i1o';
+                                const staticMapUrl = locationData
+                                    ? `https://maps.googleapis.com/maps/api/staticmap?center=${locationData.latitude},${locationData.longitude}&zoom=12&size=600x440&maptype=roadmap&markers=color:blue%7Clabel:C%7C${locationData.latitude},${locationData.longitude}&key=${GOOGLE_MAPS_API_KEY}`
+                                    : '';
 
-                                <View style={styles.detailItem}>
-                                    <Icon name="location-outline" size={20} color={COLORS.primary} />
-                                    <View style={styles.detailTextContainer}>
-                                        <Text style={styles.detailLabel}>Delivery Address</Text>
-                                        <Text style={styles.detailValue} numberOfLines={3}>
-                                            {readableAddress || 'Fetching address...'}
-                                        </Text>
-                                    </View>
-                                </View>
+                                return (
+                                    <>
+                                        <ScrollView 
+                                            style={{ maxHeight: 380 }} 
+                                            contentContainerStyle={styles.detailsList}
+                                            showsVerticalScrollIndicator={false}
+                                        >
+                                            <View style={styles.detailItem}>
+                                                <Icon name="person-outline" size={20} color={COLORS.primary} />
+                                                <View style={styles.detailTextContainer}>
+                                                    <Text style={styles.detailLabel}>Name</Text>
+                                                    <Text style={styles.detailValue}>{user?.name || 'Guest User'}</Text>
+                                                </View>
+                                            </View>
 
-                                {savedLocations.length > 0 && (
-                                    <View style={styles.savedLocationsSelection}>
-                                        <Text style={styles.savedLocationsTitle}>Deliver to saved location:</Text>
-                                        <View style={styles.savedLocationsList}>
-                                            {savedLocations.map((loc) => (
-                                                <TouchableOpacity 
-                                                    key={loc.id} 
-                                                    style={[
-                                                        styles.savedLocationChip,
-                                                        readableAddress === loc.address && styles.savedLocationChipActive
-                                                    ]}
-                                                    onPress={() => {
-                                                        setReadableAddress(loc.address);
-                                                        setLocationData({ latitude: loc.latitude, longitude: loc.longitude });
-                                                    }}
-                                                >
-                                                    <Icon 
-                                                        name={loc.label.toLowerCase() === 'home' ? 'home' : loc.label.toLowerCase() === 'work' ? 'briefcase' : 'location'} 
-                                                        size={14} 
-                                                        color={readableAddress === loc.address ? COLORS.white : COLORS.primary} 
-                                                    />
-                                                    <Text style={[
-                                                        styles.savedLocationChipText,
-                                                        readableAddress === loc.address && styles.savedLocationChipTextActive
-                                                    ]}>{loc.label}</Text>
-                                                </TouchableOpacity>
-                                            ))}
+                                            <View style={styles.detailItem}>
+                                                <Icon name="call-outline" size={20} color={COLORS.primary} />
+                                                <View style={styles.detailTextContainer}>
+                                                    <Text style={styles.detailLabel}>Phone</Text>
+                                                    <Text style={styles.detailValue}>{user?.phone || 'Not available'}</Text>
+                                                </View>
+                                            </View>
+
+                                            <View style={styles.detailItem}>
+                                                <Icon name="location-outline" size={20} color={COLORS.primary} />
+                                                <View style={styles.detailTextContainer}>
+                                                    <Text style={styles.detailLabel}>Delivery Address</Text>
+                                                    <Text style={styles.detailValue} numberOfLines={3}>
+                                                        {readableAddress || 'Fetching address...'}
+                                                    </Text>
+                                                </View>
+                                            </View>
+
+                                            {savedLocations.length > 0 && (
+                                                <View style={styles.savedLocationsSelection}>
+                                                    <Text style={styles.savedLocationsTitle}>Deliver to saved location:</Text>
+                                                    <View style={styles.savedLocationsList}>
+                                                        {savedLocations.map((loc) => (
+                                                            <TouchableOpacity 
+                                                                key={loc.id} 
+                                                                style={[
+                                                                    styles.savedLocationChip,
+                                                                    readableAddress === loc.address && styles.savedLocationChipActive
+                                                                ]}
+                                                                onPress={() => {
+                                                                    setReadableAddress(loc.address);
+                                                                    setLocationData({ latitude: loc.latitude, longitude: loc.longitude });
+                                                                }}
+                                                            >
+                                                                <Icon 
+                                                                    name={loc.label.toLowerCase() === 'home' ? 'home' : loc.label.toLowerCase() === 'work' ? 'briefcase' : 'location'} 
+                                                                    size={14} 
+                                                                    color={readableAddress === loc.address ? COLORS.white : COLORS.primary} 
+                                                                />
+                                                                <Text style={[
+                                                                    styles.savedLocationChipText,
+                                                                    readableAddress === loc.address && styles.savedLocationChipTextActive
+                                                                ]}>{loc.label}</Text>
+                                                            </TouchableOpacity>
+                                                        ))}
+                                                    </View>
+                                                </View>
+                                            )}
+
+                                            {/* Live Riders Map (Between Payment Selection and Delivery Info) */}
+                                            <View style={{
+                                                marginTop: 15,
+                                                paddingTop: 15,
+                                                borderTopWidth: 1,
+                                                borderTopColor: COLORS.lightGray
+                                            }}>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                                    <Text style={{ fontSize: SIZES.small, fontWeight: '600', color: COLORS.textSecondary }}>
+                                                        Riders Nearby (Within 5 km):
+                                                    </Text>
+                                                    <View style={{
+                                                        flexDirection: 'row',
+                                                        alignItems: 'center',
+                                                        backgroundColor: nearbyRiders.length > 0 ? '#E8F5E9' : '#FFEBEE',
+                                                        paddingHorizontal: 8,
+                                                        paddingVertical: 3,
+                                                        borderRadius: 12,
+                                                        gap: 4
+                                                    }}>
+                                                        <View style={{
+                                                            width: 6,
+                                                            height: 6,
+                                                            borderRadius: 3,
+                                                            backgroundColor: nearbyRiders.length > 0 ? '#4CAF50' : '#F44336'
+                                                        }} />
+                                                        <Text style={{
+                                                            color: nearbyRiders.length > 0 ? '#2E7D32' : '#C62828',
+                                                            fontSize: 9,
+                                                            fontWeight: '800'
+                                                        }}>
+                                                            {nearbyRiders.length > 0 ? `${nearbyRiders.length} ONLINE` : 'NO RIDERS'}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+
+                                                {locationData && (
+                                                    <View style={{
+                                                        width: '100%',
+                                                        height: 220,
+                                                        borderRadius: 12,
+                                                        overflow: 'hidden',
+                                                        position: 'relative',
+                                                        backgroundColor: '#E5E5E5',
+                                                        borderWidth: 1,
+                                                        borderColor: COLORS.lightGray
+                                                    }}>
+                                                        {/* Static Map Background */}
+                                                        <Image
+                                                            source={{ uri: staticMapUrl }}
+                                                            style={{ width: '100%', height: '100%' }}
+                                                            resizeMode="cover"
+                                                        />
+
+                                                        {/* Customer Center Dot */}
+                                                        <View style={{
+                                                            position: 'absolute',
+                                                            left: ((SCREEN_WIDTH - 60) / 2) - 15,
+                                                            top: (220 / 2) - 15,
+                                                            alignItems: 'center',
+                                                            zIndex: 5
+                                                        }}>
+                                                            <View style={{
+                                                                width: 30,
+                                                                height: 30,
+                                                                borderRadius: 15,
+                                                                backgroundColor: COLORS.primary + '30',
+                                                                justifyContent: 'center',
+                                                                alignItems: 'center'
+                                                            }}>
+                                                                <View style={{
+                                                                    width: 16,
+                                                                    height: 16,
+                                                                    borderRadius: 8,
+                                                                    backgroundColor: COLORS.primary,
+                                                                    borderWidth: 2,
+                                                                    borderColor: '#fff',
+                                                                    shadowColor: '#000',
+                                                                    shadowOffset: { width: 0, height: 1 },
+                                                                    shadowOpacity: 0.3,
+                                                                    shadowRadius: 1,
+                                                                    elevation: 3
+                                                                }} />
+                                                            </View>
+                                                        </View>
+
+                                                        {/* Online Riders Markers */}
+                                                        {nearbyRiders.map((rider, idx) => {
+                                                            const MAP_WIDTH = SCREEN_WIDTH - 60;
+                                                            const MAP_HEIGHT = 220;
+                                                            const latRad = (locationData.latitude * Math.PI) / 180;
+                                                            const scale = (156543.03392 * Math.cos(latRad)) / Math.pow(2, 12);
+                                                            
+                                                            const dx = (rider.lng - locationData.longitude) * Math.cos(latRad) * 111320;
+                                                            const dy = (rider.lat - locationData.latitude) * 110540;
+                                                            
+                                                            const px = dx / scale;
+                                                            const py = -dy / scale;
+                                                            
+                                                            const left = (MAP_WIDTH / 2) + px;
+                                                            const top = (MAP_HEIGHT / 2) + py;
+                                                            const markerSize = 40;
+
+                                                            // Skip rendering if marker lies outside boundaries
+                                                            if (left < 20 || left > MAP_WIDTH - 20 || top < 20 || top > MAP_HEIGHT - 20) {
+                                                                return null;
+                                                            }
+
+                                                            return (
+                                                                <View key={rider.employeeId} style={{
+                                                                    position: 'absolute',
+                                                                    left: left - (markerSize / 2),
+                                                                    top: top - (markerSize / 2) - 12,
+                                                                    alignItems: 'center',
+                                                                    zIndex: 10 + idx
+                                                                }}>
+                                                                    {/* Name Label */}
+                                                                    <View style={{
+                                                                        backgroundColor: 'rgba(0,0,0,0.75)',
+                                                                        paddingHorizontal: 5,
+                                                                        paddingVertical: 1,
+                                                                        borderRadius: 3,
+                                                                        marginBottom: 2
+                                                                    }}>
+                                                                        <Text style={{ color: '#fff', fontSize: 7, fontWeight: '700' }} numberOfLines={1}>
+                                                                            {rider.employeeName}
+                                                                        </Text>
+                                                                    </View>
+
+                                                                    {/* Selfie Photo */}
+                                                                    <View style={{
+                                                                        width: markerSize,
+                                                                        height: markerSize,
+                                                                        borderRadius: markerSize / 2,
+                                                                        borderWidth: 2,
+                                                                        borderColor: '#FFB300',
+                                                                        backgroundColor: '#fff',
+                                                                        justifyContent: 'center',
+                                                                        alignItems: 'center',
+                                                                        shadowColor: '#000',
+                                                                        shadowOffset: { width: 0, height: 1.5 },
+                                                                        shadowOpacity: 0.25,
+                                                                        shadowRadius: 1.5,
+                                                                        elevation: 3,
+                                                                        position: 'relative'
+                                                                    }}>
+                                                                        {rider.selfieUrl ? (
+                                                                            <Image
+                                                                                source={{ uri: rider.selfieUrl }}
+                                                                                style={{
+                                                                                    width: markerSize - 4,
+                                                                                    height: markerSize - 4,
+                                                                                    borderRadius: (markerSize - 4) / 2
+                                                                                }}
+                                                                            />
+                                                                        ) : (
+                                                                            <Icon name="person" size={16} color="#FFB300" />
+                                                                        )}
+                                                                        
+                                                                        {/* Green Online Dot */}
+                                                                        <View style={{
+                                                                            position: 'absolute',
+                                                                            bottom: 0,
+                                                                            right: 0,
+                                                                            width: 9,
+                                                                            height: 9,
+                                                                            borderRadius: 4.5,
+                                                                            backgroundColor: '#4CAF50',
+                                                                            borderWidth: 1,
+                                                                            borderColor: '#fff'
+                                                                        }} />
+                                                                    </View>
+                                                                </View>
+                                                            );
+                                                        })}
+                                                    </View>
+                                                )}
+                                            </View>
+
+                                            {/* Payment Method Selection */}
+                                            <View style={styles.paymentMethodSelection}>
+                                                <Text style={styles.paymentMethodTitle}>Select Payment Method:</Text>
+                                                <View style={styles.paymentMethodList}>
+                                                    <TouchableOpacity 
+                                                        style={[
+                                                            styles.paymentMethodChip,
+                                                            paymentMethod === 'ONLINE' && styles.paymentMethodChipActive
+                                                        ]}
+                                                        onPress={() => setPaymentMethod('ONLINE')}
+                                                    >
+                                                        <Icon 
+                                                            name="card-outline" 
+                                                            size={16} 
+                                                            color={paymentMethod === 'ONLINE' ? COLORS.white : COLORS.primary} 
+                                                        />
+                                                        <Text style={[
+                                                            styles.paymentMethodChipText,
+                                                            paymentMethod === 'ONLINE' && styles.paymentMethodChipTextActive
+                                                        ]}>Pay Online</Text>
+                                                    </TouchableOpacity>
+
+                                                    <TouchableOpacity 
+                                                        style={[
+                                                            styles.paymentMethodChip,
+                                                            paymentMethod === 'COD' && styles.paymentMethodChipActive
+                                                        ]}
+                                                        onPress={() => setPaymentMethod('COD')}
+                                                    >
+                                                        <Icon 
+                                                            name="cash-outline" 
+                                                            size={16} 
+                                                            color={paymentMethod === 'COD' ? COLORS.white : COLORS.primary} 
+                                                        />
+                                                        <Text style={[
+                                                            styles.paymentMethodChipText,
+                                                            paymentMethod === 'COD' && styles.paymentMethodChipTextActive
+                                                        ]}>COD (Cash)</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                        </ScrollView>
+
+                                        <View style={styles.confirmFooter}>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.confirmButton,
+                                                    (isFetchingInfo || nearbyRiders.length === 0) && { backgroundColor: COLORS.mediumGray, opacity: 0.7 }
+                                                ]}
+                                                onPress={finalizeOrder}
+                                                disabled={isFetchingInfo || nearbyRiders.length === 0}
+                                            >
+                                                {isFetchingInfo ? (
+                                                    <ActivityIndicator color={COLORS.white} />
+                                                ) : nearbyRiders.length === 0 ? (
+                                                    <>
+                                                        <Text style={styles.confirmButtonText}>No Riders Nearby (Min 5km)</Text>
+                                                        <Icon name="alert-circle-outline" size={20} color={COLORS.white} />
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Text style={styles.confirmButtonText}>Place Order Now</Text>
+                                                        <Icon name="checkmark-circle" size={20} color={COLORS.white} />
+                                                    </>
+                                                )}
+                                            </TouchableOpacity>
                                         </View>
-                                    </View>
-                                )}
-                            </View>
-
-                            <View style={styles.confirmFooter}>
-                                <TouchableOpacity
-                                    style={[styles.confirmButton, isFetchingInfo && { opacity: 0.7 }]}
-                                    onPress={finalizeOrder}
-                                    disabled={isFetchingInfo}
-                                >
-                                    {isFetchingInfo ? (
-                                        <ActivityIndicator color={COLORS.white} />
-                                    ) : (
-                                        <>
-                                            <Text style={styles.confirmButtonText}>Place Order Now</Text>
-                                            <Icon name="checkmark-circle" size={20} color={COLORS.white} />
-                                        </>
-                                    )}
-                                </TouchableOpacity>
-                            </View>
+                                    </>
+                                );
+                            })()}
                         </View>
                     )}
                 </Animatable.View>
@@ -509,8 +829,14 @@ const CartScreen = ({ navigation }) => {
                     >
                         <View style={styles.summaryRow}>
                             <Text style={styles.summaryLabel}>Items ({getCartCount()})</Text>
-                            <Text style={styles.summaryValue}>₹{getCartTotal()}</Text>
+                            <Text style={styles.summaryValue}>₹{cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)}</Text>
                         </View>
+                        {isFreeTeaEligible && cart['item_001'] && (
+                            <View style={styles.summaryRow}>
+                                <Text style={[styles.summaryLabel, { color: '#2E7D32', fontWeight: '600' }]}>First Tea Discount</Text>
+                                <Text style={[styles.summaryValue, { color: '#2E7D32', fontWeight: '600' }]}>-₹15</Text>
+                            </View>
+                        )}
                         <View style={styles.summaryRow}>
                             <Text style={styles.summaryLabel}>Delivery Fee</Text>
                             <Text style={[styles.summaryValue, { color: COLORS.primary }]}>FREE</Text>
@@ -865,6 +1191,47 @@ const styles = StyleSheet.create({
         color: COLORS.primary,
     },
     savedLocationChipTextActive: {
+        color: COLORS.white,
+    },
+    paymentMethodSelection: {
+        marginTop: 15,
+        paddingTop: 15,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.lightGray,
+    },
+    paymentMethodTitle: {
+        fontSize: SIZES.small,
+        fontWeight: '600',
+        color: COLORS.textSecondary,
+        marginBottom: 10,
+    },
+    paymentMethodList: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    paymentMethodChip: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: COLORS.primary + '15',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 12,
+        gap: 8,
+        borderWidth: 1,
+        borderColor: COLORS.primary + '30',
+    },
+    paymentMethodChipActive: {
+        backgroundColor: COLORS.primary,
+        borderColor: COLORS.primary,
+    },
+    paymentMethodChipText: {
+        fontSize: SIZES.small + 1,
+        fontWeight: '600',
+        color: COLORS.primary,
+    },
+    paymentMethodChipTextActive: {
         color: COLORS.white,
     },
 });

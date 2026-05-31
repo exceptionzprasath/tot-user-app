@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../config/api';
 
 const AuthContext = createContext();
 
@@ -7,6 +8,7 @@ export const AuthProvider = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [user, setUser] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isFreeTeaEligible, setIsFreeTeaEligible] = useState(false);
 
     useEffect(() => {
         const loadSession = async () => {
@@ -26,6 +28,26 @@ export const AuthProvider = ({ children }) => {
 
         loadSession();
     }, []);
+
+    const refreshFreeTeaEligibility = async () => {
+        if (user && user.phone) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/orders/customer/${encodeURIComponent(user.phone)}/free-tea-eligibility`);
+                const data = await response.json();
+                if (data && data.success) {
+                    setIsFreeTeaEligible(data.eligible);
+                }
+            } catch (error) {
+                console.log('Error checking free tea eligibility:', error.message);
+            }
+        } else {
+            setIsFreeTeaEligible(false);
+        }
+    };
+
+    useEffect(() => {
+        refreshFreeTeaEligibility();
+    }, [user, isAuthenticated]);
 
     const login = async (userData) => {
         try {
@@ -59,7 +81,16 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ isAuthenticated, user, isLoading, login, logout, updateUser }}>
+        <AuthContext.Provider value={{ 
+            isAuthenticated, 
+            user, 
+            isLoading, 
+            login, 
+            logout, 
+            updateUser,
+            isFreeTeaEligible,
+            refreshFreeTeaEligibility
+        }}>
             {children}
         </AuthContext.Provider>
     );

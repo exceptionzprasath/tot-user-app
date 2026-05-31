@@ -67,57 +67,53 @@ const AppContent = () => {
     checkAppVersion();
   }, []);
 
-  // Request notifications permission and subscribe to topics
-  React.useEffect(() => {
-    const setupNotifications = async () => {
-      try {
-        let hasPermission = false;
+  // Handle notifications and permissions sequentially when splash finishes
+  const handleSplashFinish = async () => {
+    try {
+      let hasPermission = false;
 
-        if (Platform.OS === 'android') {
-          const androidVersion = parseInt(Platform.Version, 10);
-          if (androidVersion >= 33) {
-            const granted = await PermissionsAndroid.request(
-              PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
-              {
-                title: 'Notification Permission',
-                message: 'Thambioru Tea needs permission to send you announcements and order tracking updates.',
-                buttonPositive: 'Allow',
-                buttonNegative: 'Deny',
-              }
-            );
-            hasPermission = granted === PermissionsAndroid.RESULTS.GRANTED;
-          } else {
-            hasPermission = true;
-          }
+      if (Platform.OS === 'android') {
+        const androidVersion = parseInt(Platform.Version, 10);
+        if (androidVersion >= 33) {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+            {
+              title: 'Notification Permission',
+              message: 'Thambioru Tea needs permission to send you announcements and order tracking updates.',
+              buttonPositive: 'Allow',
+              buttonNegative: 'Deny',
+            }
+          );
+          hasPermission = granted === PermissionsAndroid.RESULTS.GRANTED;
         } else {
-          // iOS
-          const authStatus = await messaging().requestPermission();
-          hasPermission =
-            authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-            authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+          hasPermission = true;
         }
-
-        if (hasPermission) {
-          console.log('[FCM] Push notifications permission granted.');
-          // Retrieve FCM token for general telemetry/tracking
-          const token = await messaging().getToken();
-          console.log('[FCM] Customer push token retrieved successfully.');
-          
-          // Subscribe to unified 'all_users' topic for general broadcast announcements
-          await messaging().subscribeToTopic('all_users');
-          console.log('[FCM] Subscribed customer to topic: all_users');
-        } else {
-          console.log('[FCM] Push notifications permission denied.');
-        }
-      } catch (err) {
-        console.error('[FCM] Setup error in customer app:', err.message);
+      } else {
+        // iOS
+        const authStatus = await messaging().requestPermission();
+        hasPermission =
+          authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+          authStatus === messaging.AuthorizationStatus.PROVISIONAL;
       }
-    };
 
-    if (isAuthenticated && isSplashDone && !isUpdateRequired) {
-      setupNotifications();
+      if (hasPermission) {
+        console.log('[FCM] Push notifications permission granted.');
+        // Retrieve FCM token for general telemetry/tracking
+        const token = await messaging().getToken();
+        console.log('[FCM] Customer push token retrieved successfully.');
+        
+        // Subscribe to unified 'all_users' topic for general broadcast announcements
+        await messaging().subscribeToTopic('all_users');
+        console.log('[FCM] Subscribed customer to topic: all_users');
+      } else {
+        console.log('[FCM] Push notifications permission denied.');
+      }
+    } catch (err) {
+      console.error('[FCM] Setup error in customer app:', err.message);
+    } finally {
+      setIsSplashDone(true);
     }
-  }, [isAuthenticated, isSplashDone, isUpdateRequired]);
+  };
 
   // If a force update is required, show the un-dismissible ForceUpdateScreen
   if (isUpdateRequired) {
@@ -132,7 +128,7 @@ const AppContent = () => {
 
   // Combine splash completion with auth loading
   if (!isSplashDone || isLoading) {
-    return <SplashScreen onFinish={() => setIsSplashDone(true)} />;
+    return <SplashScreen onFinish={handleSplashFinish} />;
   }
 
   return (

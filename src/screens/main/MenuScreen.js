@@ -25,6 +25,7 @@ import Loader from '../../components/Loader';
 import { getMenuItems } from '../../services/mockMenuService';
 import { useFavorites } from '../../context/FavoritesContext';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
 
 const { width } = Dimensions.get('window');
 const STATUSBAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight : 0;
@@ -235,10 +236,14 @@ const MenuScreen = ({ navigation }) => {
     const [isLocating, setIsLocating] = useState(false);
     const { isFavorite, toggleFavorite } = useFavorites();
     const { cart, addToCart, removeFromCart, getCartCount, getCartTotal } = useCart();
+    const { isFreeTeaEligible } = useAuth();
+
+    useEffect(() => {
+        requestLocationPermission();
+    }, []);
 
     useEffect(() => {
         loadMenuItems();
-        requestLocationPermission();
     }, [selectedCategory]);
 
     const requestLocationPermission = async () => {
@@ -493,6 +498,7 @@ const MenuScreen = ({ navigation }) => {
                                     isFavorite={isFavorite(item.id)}
                                     onToggleFavorite={() => toggleFavorite(item.id)}
                                     layout={isGridView ? 'grid' : 'list'}
+                                    isFreeTeaEligible={isFreeTeaEligible}
                                 />
                             </Animatable.View>
                         )}

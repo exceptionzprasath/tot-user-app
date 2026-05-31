@@ -13,7 +13,7 @@ import { COLORS, SIZES, SHADOWS } from '../utils/colors';
 const { width } = Dimensions.get('window');
 const cardWidth = (width - SIZES.padding * 2 - SIZES.paddingS) / 2;
 
-const ProductCard = ({ item, onAddToCart, onRemoveFromCart, quantity = 0, isFavorite, onToggleFavorite, layout = 'grid' }) => {
+const ProductCard = ({ item, onAddToCart, onRemoveFromCart, quantity = 0, isFavorite, onToggleFavorite, layout = 'grid', isFreeTeaEligible = false }) => {
     const isList = layout === 'list';
 
     return (
@@ -50,7 +50,16 @@ const ProductCard = ({ item, onAddToCart, onRemoveFromCart, quantity = 0, isFavo
                 </View>
 
                 <View style={[styles.footer, isList && styles.footerList]}>
-                    <Text style={styles.price}>₹{item.price}</Text>
+                    {isFreeTeaEligible && item.id === 'item_001' ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text style={[styles.price, { textDecorationLine: 'line-through', color: COLORS.mediumGray, fontSize: SIZES.regular }]}>₹15</Text>
+                            <View style={{ backgroundColor: '#E8F5E9', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: '#C8E6C9' }}>
+                                <Text style={{ color: '#2E7D32', fontWeight: '800', fontSize: SIZES.xs, letterSpacing: 0.5 }}>FREE</Text>
+                            </View>
+                        </View>
+                    ) : (
+                        <Text style={styles.price}>₹{item.price}</Text>
+                    )}
 
                     {quantity > 0 ? (
                         <View style={styles.quantityContainer}>

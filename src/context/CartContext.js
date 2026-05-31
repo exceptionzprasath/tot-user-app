@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from './AuthContext';
 
 const CartContext = createContext();
 
@@ -64,8 +65,14 @@ export const CartProvider = ({ children }) => {
         return Object.values(cart).reduce((sum, item) => sum + item.quantity, 0);
     };
 
+    const { isFreeTeaEligible } = useAuth();
+
     const getCartTotal = () => {
-        return Object.values(cart).reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        let total = Object.values(cart).reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        if (isFreeTeaEligible && cart['item_001']) {
+            total = Math.max(0, total - 15);
+        }
+        return total;
     };
 
     return (

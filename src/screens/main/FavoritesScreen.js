@@ -20,6 +20,7 @@ import Loader from '../../components/Loader';
 import { getMenuItems } from '../../services/mockMenuService';
 import { useFavorites } from '../../context/FavoritesContext';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
 
 const { width } = Dimensions.get('window');
 const STATUSBAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight : 0;
@@ -31,6 +32,7 @@ const FavoritesScreen = ({ navigation }) => {
     const [isSearchVisible, setIsSearchVisible] = useState(false);
     const { favorites, isFavorite, toggleFavorite } = useFavorites();
     const { cart, addToCart, getCartCount, getCartTotal } = useCart();
+    const { isFreeTeaEligible } = useAuth();
 
     const [allMenuItems, setAllMenuItems] = useState([]);
 
@@ -153,6 +155,7 @@ const FavoritesScreen = ({ navigation }) => {
                                 quantity={cart[item.id]?.quantity || 0}
                                 isFavorite={isFavorite(item.id)}
                                 onToggleFavorite={() => toggleFavorite(item.id)}
+                                isFreeTeaEligible={isFreeTeaEligible}
                             />
                         </Animatable.View>
                     )}
