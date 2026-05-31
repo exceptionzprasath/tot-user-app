@@ -76,6 +76,19 @@ const TrackOrderScreen = ({ route, navigation }) => {
                     <Animatable.Text animation="fadeInUp" duration={800} delay={500} style={styles.apologySub}>
                         We are sorry that our riders are busy right now, so thanks for your understanding.
                     </Animatable.Text>
+                    {order?.paymentMode === 'online' && (
+                        <Animatable.View 
+                            animation="fadeInUp" 
+                            duration={800} 
+                            delay={600} 
+                            style={styles.refundContainer}
+                        >
+                            <Icon name="cash-outline" size={24} color="#2E7D32" style={styles.refundIcon} />
+                            <Text style={styles.refundText}>
+                                Refund initiated successfully. Amount will be credited to your original payment method within 2-3 business days.
+                            </Text>
+                        </Animatable.View>
+                    )}
                     <Animatable.View animation="fadeInUp" duration={800} delay={700} style={styles.btnWrapper}>
                         <TouchableOpacity
                             style={styles.apologyButton}
@@ -181,9 +194,7 @@ const TrackOrderScreen = ({ route, navigation }) => {
                             <View style={styles.driverInfo}>
                                 <Text style={styles.driverName}>{order.employeeName}</Text>
                                 <View style={styles.ratingContainer}>
-                                    <Icon name="star" size={12} color={COLORS.warning} />
-                                    <Text style={styles.ratingText}>4.8</Text>
-                                    <Text style={styles.vehicleInfo}>• Thambi Oru Tea Partner</Text>
+                                    <Text style={styles.vehicleInfo}>Thambi Oru Tea Partner</Text>
                                 </View>
                             </View>
                             <View style={styles.driverActions}>
@@ -544,6 +555,27 @@ const styles = StyleSheet.create({
         fontSize: SIZES.regular,
         fontWeight: '700',
         color: COLORS.textPrimary,
+    },
+    refundContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#E8F5E9',
+        borderWidth: 1,
+        borderColor: '#2E7D3230',
+        borderRadius: SIZES.radius,
+        padding: SIZES.padding,
+        marginBottom: SIZES.paddingXL,
+        width: width * 0.85,
+    },
+    refundIcon: {
+        marginRight: 10,
+    },
+    refundText: {
+        flex: 1,
+        fontSize: SIZES.small + 1,
+        color: '#2E7D32',
+        fontWeight: '600',
+        lineHeight: 18,
     },
 });
 

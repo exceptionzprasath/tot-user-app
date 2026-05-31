@@ -218,7 +218,7 @@ const OrdersScreen = ({ navigation }) => {
             </Text>
             <TouchableOpacity
                 style={styles.browseButton}
-                onPress={() => navigation.navigate('Menu')}>
+                onPress={() => navigation.navigate('MainTabs', { screen: 'Menu' })}>
                 <Text style={styles.browseButtonText}>Browse Menu</Text>
             </TouchableOpacity>
         </View>

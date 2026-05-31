@@ -327,7 +327,7 @@ const MenuScreen = ({ navigation }) => {
         <TouchableOpacity
             style={styles.locationContainer}
             activeOpacity={0.8}
-            onPress={getLocation}
+            onPress={() => navigation.navigate('Profile', { screen: 'SavedLocations' })}
         >
             <View style={styles.locationMain}>
                 <View style={styles.locationIconWrapper}>

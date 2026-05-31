@@ -20,7 +20,7 @@ const ProductCard = ({ item, onAddToCart, onRemoveFromCart, quantity = 0, isFavo
         <View style={[styles.container, isList && styles.containerList]}>
             {/* Image Section */}
             <View style={[styles.imageContainer, isList && styles.imageContainerList]}>
-                <Image source={{ uri: item.image }} style={styles.image} />
+                <Image source={typeof item.image === 'string' ? { uri: item.image } : item.image} style={styles.image} />
                 {!item.available && (
                     <View style={styles.unavailableOverlay}>
                         <Text style={styles.unavailableText}>Out of Stock</Text>

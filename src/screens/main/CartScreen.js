@@ -93,7 +93,7 @@ const CartScreen = ({ navigation }) => {
     // Real-time Firestore event listener for payment success
     React.useEffect(() => {
         if (!pendingOrderId) return;
-        
+
         console.log('🔥 [Firestore] Listening to order for payment verification:', pendingOrderId);
         const unsubscribe = listenToOrder(
             pendingOrderId,
@@ -148,7 +148,7 @@ const CartScreen = ({ navigation }) => {
         };
 
         const subscription = Linking.addEventListener('url', handleDeepLink);
-        
+
         Linking.getInitialURL().then((url) => {
             if (url) handleDeepLink({ url });
         });
@@ -221,7 +221,7 @@ const CartScreen = ({ navigation }) => {
             async (position) => {
                 const { latitude, longitude } = position.coords;
                 setLocationData({ latitude, longitude });
-                
+
                 // Fetch readable address
                 const address = await getAddressFromCoords(latitude, longitude);
                 setReadableAddress(address);
@@ -266,7 +266,7 @@ const CartScreen = ({ navigation }) => {
                     setPendingOrderId(orderId);
                     setCheckoutUrl(url);
                     setPaymentStatus('waiting');
-                    
+
                     // Open the checkout page in the mobile browser
                     Linking.openURL(url);
                 } else {
@@ -291,13 +291,13 @@ const CartScreen = ({ navigation }) => {
 
     const renderCartItem = ({ item, index }) => {
         const isFreeTea = isFreeTeaEligible && item.id === 'item_001';
-        const displayTotal = isFreeTea 
+        const displayTotal = isFreeTea
             ? Math.max(0, item.price * (item.quantity - 1))
             : item.price * item.quantity;
 
         return (
             <Animatable.View animation="fadeInRight" delay={index * 100} style={styles.cartItem}>
-                <Image source={{ uri: item.image }} style={styles.itemImage} />
+                <Image source={typeof item.image === 'string' ? { uri: item.image } : item.image} style={styles.itemImage} />
                 <View style={styles.itemInfo}>
                     <Text style={styles.itemName}>{item.name}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -347,7 +347,7 @@ const CartScreen = ({ navigation }) => {
             <Text style={styles.emptySubtitle}>Add some delicious tea and snacks to get started!</Text>
             <TouchableOpacity
                 style={styles.browseButton}
-                onPress={() => navigation.navigate('Menu')}>
+                onPress={() => navigation.navigate('MainTabs', { screen: 'Menu' })}>
                 <Text style={styles.browseButtonText}>Browse Menu</Text>
             </TouchableOpacity>
         </View>
@@ -374,9 +374,9 @@ const CartScreen = ({ navigation }) => {
                                     <Text style={{ color: COLORS.textSecondary, textAlign: 'center', marginHorizontal: 20, marginTop: 10, fontSize: SIZES.small, lineHeight: 18 }}>
                                         Please complete the payment in the secure browser window that was opened.
                                     </Text>
-                                    
+
                                     <View style={{ width: '100%', gap: 10, marginTop: 25 }}>
-                                        <TouchableOpacity 
+                                        <TouchableOpacity
                                             style={styles.confirmButton}
                                             onPress={() => checkoutUrl && Linking.openURL(checkoutUrl)}
                                         >
@@ -384,7 +384,7 @@ const CartScreen = ({ navigation }) => {
                                             <Text style={styles.confirmButtonText}>Reopen Payment Page</Text>
                                         </TouchableOpacity>
 
-                                        <TouchableOpacity 
+                                        <TouchableOpacity
                                             style={[styles.confirmButton, { backgroundColor: COLORS.success }]}
                                             onPress={async () => {
                                                 if (pendingOrderId) {
@@ -419,7 +419,7 @@ const CartScreen = ({ navigation }) => {
                                             )}
                                         </TouchableOpacity>
 
-                                        <TouchableOpacity 
+                                        <TouchableOpacity
                                             style={[styles.confirmButton, { backgroundColor: COLORS.gray, opacity: 0.8 }]}
                                             onPress={() => {
                                                 setPaymentStatus('none');
@@ -443,7 +443,7 @@ const CartScreen = ({ navigation }) => {
                                 style={styles.lottieAnimation}
                             />
                             <Text style={styles.fetchingText}>Fetching current location...</Text>
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={styles.cancelButton}
                                 onPress={() => setIsOrdering(false)}
                             >
@@ -474,8 +474,8 @@ const CartScreen = ({ navigation }) => {
 
                                 return (
                                     <>
-                                        <ScrollView 
-                                            style={{ maxHeight: 380 }} 
+                                        <ScrollView
+                                            style={{ maxHeight: 380 }}
                                             contentContainerStyle={styles.detailsList}
                                             showsVerticalScrollIndicator={false}
                                         >
@@ -505,36 +505,48 @@ const CartScreen = ({ navigation }) => {
                                                 </View>
                                             </View>
 
-                                            {savedLocations.length > 0 && (
-                                                <View style={styles.savedLocationsSelection}>
-                                                    <Text style={styles.savedLocationsTitle}>Deliver to saved location:</Text>
-                                                    <View style={styles.savedLocationsList}>
-                                                        {savedLocations.map((loc) => (
-                                                            <TouchableOpacity 
-                                                                key={loc.id} 
-                                                                style={[
-                                                                    styles.savedLocationChip,
-                                                                    readableAddress === loc.address && styles.savedLocationChipActive
-                                                                ]}
-                                                                onPress={() => {
-                                                                    setReadableAddress(loc.address);
-                                                                    setLocationData({ latitude: loc.latitude, longitude: loc.longitude });
-                                                                }}
-                                                            >
-                                                                <Icon 
-                                                                    name={loc.label.toLowerCase() === 'home' ? 'home' : loc.label.toLowerCase() === 'work' ? 'briefcase' : 'location'} 
-                                                                    size={14} 
-                                                                    color={readableAddress === loc.address ? COLORS.white : COLORS.primary} 
-                                                                />
-                                                                <Text style={[
-                                                                    styles.savedLocationChipText,
-                                                                    readableAddress === loc.address && styles.savedLocationChipTextActive
-                                                                ]}>{loc.label}</Text>
-                                                            </TouchableOpacity>
-                                                        ))}
-                                                    </View>
+                                            <View style={styles.savedLocationsSelection}>
+                                                <Text style={styles.savedLocationsTitle}>Deliver to saved location:</Text>
+                                                <View style={styles.savedLocationsList}>
+                                                    {savedLocations.map((loc) => (
+                                                        <TouchableOpacity
+                                                            key={loc.id}
+                                                            style={[
+                                                                styles.savedLocationChip,
+                                                                readableAddress === loc.address && styles.savedLocationChipActive
+                                                            ]}
+                                                            onPress={() => {
+                                                                setReadableAddress(loc.address);
+                                                                setLocationData({ latitude: loc.latitude, longitude: loc.longitude });
+                                                            }}
+                                                        >
+                                                            <Icon
+                                                                name={loc.label.toLowerCase() === 'home' ? 'home' : loc.label.toLowerCase() === 'work' ? 'briefcase' : 'location'}
+                                                                size={14}
+                                                                color={readableAddress === loc.address ? COLORS.white : COLORS.primary}
+                                                            />
+                                                            <Text style={[
+                                                                styles.savedLocationChipText,
+                                                                readableAddress === loc.address && styles.savedLocationChipTextActive
+                                                            ]}>{loc.label}</Text>
+                                                        </TouchableOpacity>
+                                                    ))}
+
+                                                    <TouchableOpacity
+                                                        style={[styles.savedLocationChip, { borderStyle: 'dashed', backgroundColor: COLORS.white }]}
+                                                        onPress={() => {
+                                                            setIsOrdering(false);
+                                                            navigation.navigate('MainTabs', {
+                                                                screen: 'Profile',
+                                                                params: { screen: 'SavedLocations' }
+                                                            });
+                                                        }}
+                                                    >
+                                                        <Icon name="add" size={14} color={COLORS.primary} />
+                                                        <Text style={styles.savedLocationChipText}>Other Location</Text>
+                                                    </TouchableOpacity>
                                                 </View>
-                                            )}
+                                            </View>
 
                                             {/* Live Riders Map (Between Payment Selection and Delivery Info) */}
                                             <View style={{
@@ -628,13 +640,13 @@ const CartScreen = ({ navigation }) => {
                                                             const MAP_HEIGHT = 220;
                                                             const latRad = (locationData.latitude * Math.PI) / 180;
                                                             const scale = (156543.03392 * Math.cos(latRad)) / Math.pow(2, 12);
-                                                            
+
                                                             const dx = (rider.lng - locationData.longitude) * Math.cos(latRad) * 111320;
                                                             const dy = (rider.lat - locationData.latitude) * 110540;
-                                                            
+
                                                             const px = dx / scale;
                                                             const py = -dy / scale;
-                                                            
+
                                                             const left = (MAP_WIDTH / 2) + px;
                                                             const top = (MAP_HEIGHT / 2) + py;
                                                             const markerSize = 40;
@@ -694,7 +706,7 @@ const CartScreen = ({ navigation }) => {
                                                                         ) : (
                                                                             <Icon name="person" size={16} color="#FFB300" />
                                                                         )}
-                                                                        
+
                                                                         {/* Green Online Dot */}
                                                                         <View style={{
                                                                             position: 'absolute',
@@ -719,17 +731,17 @@ const CartScreen = ({ navigation }) => {
                                             <View style={styles.paymentMethodSelection}>
                                                 <Text style={styles.paymentMethodTitle}>Select Payment Method:</Text>
                                                 <View style={styles.paymentMethodList}>
-                                                    <TouchableOpacity 
+                                                    <TouchableOpacity
                                                         style={[
                                                             styles.paymentMethodChip,
                                                             paymentMethod === 'ONLINE' && styles.paymentMethodChipActive
                                                         ]}
                                                         onPress={() => setPaymentMethod('ONLINE')}
                                                     >
-                                                        <Icon 
-                                                            name="card-outline" 
-                                                            size={16} 
-                                                            color={paymentMethod === 'ONLINE' ? COLORS.white : COLORS.primary} 
+                                                        <Icon
+                                                            name="card-outline"
+                                                            size={16}
+                                                            color={paymentMethod === 'ONLINE' ? COLORS.white : COLORS.primary}
                                                         />
                                                         <Text style={[
                                                             styles.paymentMethodChipText,
@@ -737,17 +749,17 @@ const CartScreen = ({ navigation }) => {
                                                         ]}>Pay Online</Text>
                                                     </TouchableOpacity>
 
-                                                    <TouchableOpacity 
+                                                    <TouchableOpacity
                                                         style={[
                                                             styles.paymentMethodChip,
                                                             paymentMethod === 'COD' && styles.paymentMethodChipActive
                                                         ]}
                                                         onPress={() => setPaymentMethod('COD')}
                                                     >
-                                                        <Icon 
-                                                            name="cash-outline" 
-                                                            size={16} 
-                                                            color={paymentMethod === 'COD' ? COLORS.white : COLORS.primary} 
+                                                        <Icon
+                                                            name="cash-outline"
+                                                            size={16}
+                                                            color={paymentMethod === 'COD' ? COLORS.white : COLORS.primary}
                                                         />
                                                         <Text style={[
                                                             styles.paymentMethodChipText,
@@ -822,9 +834,9 @@ const CartScreen = ({ navigation }) => {
                     />
 
                     {/* Footer / Summary */}
-                    <Animatable.View 
-                        animation="slideInUp" 
-                        duration={400} 
+                    <Animatable.View
+                        animation="slideInUp"
+                        duration={400}
                         style={[styles.footer, { paddingBottom: Platform.OS === 'ios' ? 40 : SIZES.padding + extraBottom }]}
                     >
                         <View style={styles.summaryRow}>
@@ -1233,6 +1245,31 @@ const styles = StyleSheet.create({
     },
     paymentMethodChipTextActive: {
         color: COLORS.white,
+    },
+    addLocationPromptCard: {
+        backgroundColor: COLORS.primary + '10',
+        borderRadius: 12,
+        padding: 12,
+        borderWidth: 1.5,
+        borderColor: COLORS.primary + '30',
+        borderStyle: 'dashed',
+        marginTop: 10,
+        marginBottom: 5,
+    },
+    addLocationPromptContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    addLocationPromptTitle: {
+        fontSize: SIZES.regular - 1,
+        fontWeight: '700',
+        color: COLORS.primary,
+        marginBottom: 2,
+    },
+    addLocationPromptSubtitle: {
+        fontSize: SIZES.small,
+        color: COLORS.textSecondary,
+        lineHeight: 16,
     },
 });
 

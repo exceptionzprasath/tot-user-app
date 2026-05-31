@@ -1,3 +1,55 @@
+import React, { useEffect } from 'react';
+import { View, StyleSheet, StatusBar, Dimensions } from 'react-native';
+import Video from 'react-native-video';
+import { COLORS } from '../utils/colors';
+
+const { width, height } = Dimensions.get('window');
+
+const SplashScreen = ({ onFinish }) => {
+    useEffect(() => {
+        // Automatically transition to the next screen after 7 seconds (7000ms)
+        const timer = setTimeout(() => {
+            onFinish();
+        }, 7000);
+
+        return () => clearTimeout(timer);
+    }, [onFinish]);
+
+    return (
+        <View style={styles.container}>
+            <StatusBar hidden />
+            <Video
+                source={require('../assets/splash-screen-video.mp4')}
+                style={styles.backgroundVideo}
+                resizeMode="cover"
+                onEnd={onFinish}
+                onError={(e) => {
+                    console.error('Splash video error:', e);
+                    onFinish();
+                }}
+                muted={false}
+                repeat={false}
+            />
+        </View>
+    );
+};
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: COLORS.black || '#000000',
+    },
+    backgroundVideo: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        bottom: 0,
+        right: 0,
+    },
+});
+
+/*
+// OLD SPLASH SCREEN RENDER LOGIC (COMMENTED FOR NOW)
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Image, StatusBar, Dimensions, ImageBackground, Text } from 'react-native';
 import * as Animatable from 'react-native-animatable';
@@ -166,5 +218,5 @@ const styles = StyleSheet.create({
         textTransform: 'uppercase',
     }
 });
-
+*/
 export default SplashScreen;
