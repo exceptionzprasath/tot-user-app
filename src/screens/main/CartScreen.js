@@ -217,23 +217,35 @@ const CartScreen = ({ navigation }) => {
             return;
         }
 
-        Geolocation.getCurrentPosition(
-            async (position) => {
-                const { latitude, longitude } = position.coords;
-                setLocationData({ latitude, longitude });
+        const performLocationFetch = (highAccuracy = true) => {
+            Geolocation.getCurrentPosition(
+                async (position) => {
+                    const { latitude, longitude } = position.coords;
+                    setLocationData({ latitude, longitude });
 
-                // Fetch readable address
-                const address = await getAddressFromCoords(latitude, longitude);
-                setReadableAddress(address);
-                setOrderStep('confirm');
-            },
-            (error) => {
-                console.error(error);
-                Alert.alert('Location Error', 'Failed to get your current location. Please try again.');
-                setIsOrdering(false);
-            },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-        );
+                    // Fetch readable address
+                    const address = await getAddressFromCoords(latitude, longitude);
+                    setReadableAddress(address);
+                    setOrderStep('confirm');
+                },
+                async (error) => {
+                    console.log(`Location fetch error (highAccuracy=${highAccuracy}):`, error.code, error.message);
+                    if (highAccuracy) {
+                        console.log('Retrying location fetch with low accuracy...');
+                        performLocationFetch(false);
+                    } else {
+                        Alert.alert('Location Error', 'Failed to get your current location. Please check your GPS/Network settings and try again.');
+                        setIsOrdering(false);
+                    }
+                },
+                { 
+                    enableHighAccuracy: highAccuracy, 
+                    timeout: highAccuracy ? 10000 : 20000, 
+                    maximumAge: 10000 
+                }
+            );
+        };
+        performLocationFetch(true);
     };
 
     const finalizeOrder = async () => {
@@ -464,7 +476,7 @@ const CartScreen = ({ navigation }) => {
                                 const nearbyRiders = onlineRiders.filter(r => {
                                     if (!locationData || !r.lat || !r.lng) return false;
                                     const d = calculateDistance(locationData.latitude, locationData.longitude, r.lat, r.lng);
-                                    return d <= 5.0;
+                                    return d <= 2.0;
                                 });
 
                                 const GOOGLE_MAPS_API_KEY = 'AIzaSyBO86Y_HqbJDWjCfBljLC72qiazTSk4i1o';
@@ -557,7 +569,7 @@ const CartScreen = ({ navigation }) => {
                                             }}>
                                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                                                     <Text style={{ fontSize: SIZES.small, fontWeight: '600', color: COLORS.textSecondary }}>
-                                                        Riders Nearby (Within 5 km):
+                                                        Riders Nearby (Within 2 km):
                                                     </Text>
                                                     <View style={{
                                                         flexDirection: 'row',
@@ -727,47 +739,7 @@ const CartScreen = ({ navigation }) => {
                                                 )}
                                             </View>
 
-                                            {/* Payment Method Selection */}
-                                            <View style={styles.paymentMethodSelection}>
-                                                <Text style={styles.paymentMethodTitle}>Select Payment Method:</Text>
-                                                <View style={styles.paymentMethodList}>
-                                                    <TouchableOpacity
-                                                        style={[
-                                                            styles.paymentMethodChip,
-                                                            paymentMethod === 'ONLINE' && styles.paymentMethodChipActive
-                                                        ]}
-                                                        onPress={() => setPaymentMethod('ONLINE')}
-                                                    >
-                                                        <Icon
-                                                            name="card-outline"
-                                                            size={16}
-                                                            color={paymentMethod === 'ONLINE' ? COLORS.white : COLORS.primary}
-                                                        />
-                                                        <Text style={[
-                                                            styles.paymentMethodChipText,
-                                                            paymentMethod === 'ONLINE' && styles.paymentMethodChipTextActive
-                                                        ]}>Pay Online</Text>
-                                                    </TouchableOpacity>
-
-                                                    <TouchableOpacity
-                                                        style={[
-                                                            styles.paymentMethodChip,
-                                                            paymentMethod === 'COD' && styles.paymentMethodChipActive
-                                                        ]}
-                                                        onPress={() => setPaymentMethod('COD')}
-                                                    >
-                                                        <Icon
-                                                            name="cash-outline"
-                                                            size={16}
-                                                            color={paymentMethod === 'COD' ? COLORS.white : COLORS.primary}
-                                                        />
-                                                        <Text style={[
-                                                            styles.paymentMethodChipText,
-                                                            paymentMethod === 'COD' && styles.paymentMethodChipTextActive
-                                                        ]}>COD (Cash)</Text>
-                                                    </TouchableOpacity>
-                                                </View>
-                                            </View>
+                                            {/* Direct Razorpay Secure Payment */}
                                         </ScrollView>
 
                                         <View style={styles.confirmFooter}>
@@ -783,7 +755,7 @@ const CartScreen = ({ navigation }) => {
                                                     <ActivityIndicator color={COLORS.white} />
                                                 ) : nearbyRiders.length === 0 ? (
                                                     <>
-                                                        <Text style={styles.confirmButtonText}>No Riders Nearby (Min 5km)</Text>
+                                                        <Text style={styles.confirmButtonText}>No Riders Nearby (Min 2km)</Text>
                                                         <Icon name="alert-circle-outline" size={20} color={COLORS.white} />
                                                     </>
                                                 ) : (

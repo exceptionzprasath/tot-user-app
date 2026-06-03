@@ -105,45 +105,77 @@ const SavedLocationsScreen = ({ navigation }) => {
                 setIsLocating(false);
             },
             (error) => {
-                Alert.alert('Error', 'Failed to retrieve GPS location.');
-                setIsLocating(false);
+                console.log('High-accuracy GPS pin failed, retrying with low accuracy:', error.code, error.message);
+                // Fallback: retry with low accuracy (Wi-Fi/Cell tower) for cold start reliability
+                Geolocation.getCurrentPosition(
+                    (position) => {
+                        const { latitude, longitude } = position.coords;
+                        setNewLocation(prev => ({
+                            ...prev,
+                            latitude,
+                            longitude,
+                        }));
+                        setIsLocating(false);
+                    },
+                    (fallbackError) => {
+                        Alert.alert('Error', 'Failed to retrieve GPS location. Please check your location settings.');
+                        setIsLocating(false);
+                    },
+                    { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+                );
             },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
         );
     };
 
     const fetchCurrentLocation = () => {
         setIsLocating(true);
+
+        const onPositionReceived = async (latitude, longitude) => {
+            try {
+                const response = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+                    {
+                        headers: {
+                            'User-Agent': 'ThambiOruTeaApp/1.0',
+                        },
+                    }
+                );
+                const data = await response.json();
+                setNewLocation(prev => ({
+                    ...prev,
+                    address: data.display_name || 'Current Location',
+                    latitude,
+                    longitude,
+                }));
+            } catch (error) {
+                Alert.alert('Error', 'Failed to retrieve address for coordinates.');
+            } finally {
+                setIsLocating(false);
+            }
+        };
+
         Geolocation.getCurrentPosition(
-            async (position) => {
+            (position) => {
                 const { latitude, longitude } = position.coords;
-                try {
-                    const response = await fetch(
-                        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
-                        {
-                            headers: {
-                                'User-Agent': 'ThambiOruTeaApp/1.0',
-                            },
-                        }
-                    );
-                    const data = await response.json();
-                    setNewLocation(prev => ({
-                        ...prev,
-                        address: data.display_name || 'Current Location',
-                        latitude,
-                        longitude,
-                    }));
-                } catch (error) {
-                    Alert.alert('Error', 'Failed to retrieve address for coordinates.');
-                } finally {
-                    setIsLocating(false);
-                }
+                onPositionReceived(latitude, longitude);
             },
             (error) => {
-                Alert.alert('Error', 'Failed to retrieve GPS location.');
-                setIsLocating(false);
+                console.log('High-accuracy current location failed, retrying with low accuracy:', error.code, error.message);
+                // Fallback: retry with low accuracy (Wi-Fi/Cell tower) for cold start reliability
+                Geolocation.getCurrentPosition(
+                    (position) => {
+                        const { latitude, longitude } = position.coords;
+                        onPositionReceived(latitude, longitude);
+                    },
+                    (fallbackError) => {
+                        Alert.alert('Error', 'Failed to retrieve GPS location. Please check your location settings.');
+                        setIsLocating(false);
+                    },
+                    { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+                );
             },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
         );
     };
 

@@ -23,6 +23,7 @@ const { width, height } = Dimensions.get('window');
 const TrackOrderScreen = ({ route, navigation }) => {
     const { order: initialOrder } = route.params;
     const [order, setOrder] = useState(initialOrder);
+    const [timeLeft, setTimeLeft] = useState(60);
 
     const getStatusStep = () => {
         switch (order?.status) {
@@ -42,6 +43,36 @@ const TrackOrderScreen = ({ route, navigation }) => {
         { label: 'Confirmed', icon: 'checkmark-circle-outline' },
         { label: 'Delivered', icon: 'checkmark-done-circle-outline' },
     ];
+
+    const isFlaskTea = order?.items?.some(item => 
+        (item.name || '').toLowerCase().includes('flask tea')
+    );
+    const timeoutLimit = isFlaskTea ? 300 : 60;
+
+    useEffect(() => {
+        if (order?.status !== 'placed') return;
+
+        // Calculate time elapsed since creation
+        const createdTime = new Date(order.createdAt).getTime();
+        const elapsedSeconds = Math.floor((Date.now() - createdTime) / 1000);
+        const remaining = Math.max(0, timeoutLimit - elapsedSeconds);
+        
+        setTimeLeft(remaining);
+
+        if (remaining <= 0) return;
+
+        const interval = setInterval(() => {
+            setTimeLeft(prev => {
+                if (prev <= 1) {
+                    clearInterval(interval);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [order?.status, order?.createdAt, timeoutLimit]);
 
     useEffect(() => {
         // Firestore real-time listener for this specific order
@@ -146,6 +177,36 @@ const TrackOrderScreen = ({ route, navigation }) => {
                     <View style={styles.etaHeader}>
                         <Icon name="hourglass-outline" size={24} color={COLORS.secondary} />
                         <Text style={styles.etaTextHeader}>Waiting for confirmation...</Text>
+                    </View>
+                )}
+
+                {order?.status === 'placed' && (
+                    <View style={styles.countdownContainer}>
+                        <View style={styles.countdownHeader}>
+                            <Text style={styles.countdownLabel}>
+                                {timeLeft > 0 
+                                    ? isFlaskTea 
+                                        ? `Awaiting Corporate approval... ${Math.floor(timeLeft / 60)}m ${timeLeft % 60}s`
+                                        : `Connecting to nearby riders... ${timeLeft}s` 
+                                    : isFlaskTea
+                                        ? 'Refunding order...'
+                                        : 'Assigning rider now...'}
+                            </Text>
+                            <Icon name="radio-outline" size={18} color={COLORS.secondary} />
+                        </View>
+                        <View style={styles.progressBarBg}>
+                            <View 
+                                style={[
+                                    styles.progressBarFill, 
+                                    { width: `${(timeLeft / timeoutLimit) * 100}%` }
+                                ]} 
+                            />
+                        </View>
+                        <Text style={styles.countdownHint}>
+                            {isFlaskTea 
+                                ? 'Corporate Manager is reviewing your premium Flask Tea order (Max 5 mins)'
+                                : 'Rider will accept and confirm your delivery in under a minute'}
+                        </Text>
                     </View>
                 )}
 
@@ -576,6 +637,43 @@ const styles = StyleSheet.create({
         color: '#2E7D32',
         fontWeight: '600',
         lineHeight: 18,
+    },
+    countdownContainer: {
+        backgroundColor: COLORS.white,
+        marginHorizontal: SIZES.padding,
+        padding: SIZES.padding,
+        borderRadius: SIZES.radiusLarge,
+        marginBottom: SIZES.padding,
+        ...SHADOWS.small,
+    },
+    countdownHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    countdownLabel: {
+        fontSize: SIZES.regular,
+        fontWeight: '700',
+        color: COLORS.textPrimary,
+    },
+    progressBarBg: {
+        height: 8,
+        backgroundColor: COLORS.lightGray,
+        borderRadius: 4,
+        overflow: 'hidden',
+        marginVertical: 4,
+    },
+    progressBarFill: {
+        height: '100%',
+        backgroundColor: COLORS.secondary,
+        borderRadius: 4,
+    },
+    countdownHint: {
+        fontSize: SIZES.xs,
+        color: COLORS.mediumGray,
+        marginTop: 6,
+        lineHeight: 16,
     },
 });
 

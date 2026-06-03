@@ -272,31 +272,48 @@ const MenuScreen = ({ navigation }) => {
         }
 
         setIsLocating(true);
-        Geolocation.getCurrentPosition(
-            async (position) => {
-                const { latitude, longitude } = position.coords;
-                try {
-                    const response = await fetch(
-                        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=AIzaSyAs3nkKoCsndZiXeV6oh0PvRLL7FpMiZ4k`
-                    );
-                    const data = await response.json();
-                    if (data.results && data.results.length > 0) {
-                        setCurrentLocation(data.results[0].formatted_address);
-                    } else {
-                        setCurrentLocation('Unknown Location');
-                    }
-                } catch (error) {
-                    setCurrentLocation('Failed to get address');
-                } finally {
-                    setIsLocating(false);
+
+        const reverseGeocode = async (latitude, longitude) => {
+            try {
+                const response = await fetch(
+                    `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=AIzaSyAs3nkKoCsndZiXeV6oh0PvRLL7FpMiZ4k`
+                );
+                const data = await response.json();
+                if (data.results && data.results.length > 0) {
+                    setCurrentLocation(data.results[0].formatted_address);
+                } else {
+                    setCurrentLocation('Unknown Location');
                 }
+            } catch (error) {
+                setCurrentLocation('Failed to get address');
+            } finally {
+                setIsLocating(false);
+            }
+        };
+
+        // Try high-accuracy GPS first
+        Geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                reverseGeocode(latitude, longitude);
             },
             (error) => {
-                console.log(error.code, error.message);
-                setCurrentLocation('Location error');
-                setIsLocating(false);
+                console.log('High-accuracy location failed, retrying with low accuracy:', error.code, error.message);
+                // Fallback: retry with low accuracy (Wi-Fi/Cell tower) which is much faster on cold start
+                Geolocation.getCurrentPosition(
+                    (position) => {
+                        const { latitude, longitude } = position.coords;
+                        reverseGeocode(latitude, longitude);
+                    },
+                    (fallbackError) => {
+                        console.log('Low-accuracy location also failed:', fallbackError.code, fallbackError.message);
+                        setCurrentLocation('Location unavailable');
+                        setIsLocating(false);
+                    },
+                    { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+                );
             },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
         );
     };
 
