@@ -179,7 +179,20 @@ const ProfileScreen = ({ navigation }) => {
                                         placeholder="Enter your name"
                                     />
                                 ) : (
-                                    <Text style={styles.profileName}>{displayName}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                        <Text style={styles.profileName}>{displayName}</Text>
+                                        {userData.isVerified ? (
+                                            <View style={styles.verifiedBadge}>
+                                                <Icon name="checkmark-circle" size={12} color="#2E7D32" />
+                                                <Text style={styles.verifiedText}>Verified</Text>
+                                            </View>
+                                        ) : (
+                                            <View style={styles.unverifiedBadge}>
+                                                <Icon name="close-circle" size={12} color="#C62828" />
+                                                <Text style={styles.unverifiedText}>Not Verified</Text>
+                                            </View>
+                                        )}
+                                    </View>
                                 )}
                                 <View style={styles.phoneRow}>
                                     <Icon name="call-outline" size={14} color={COLORS.mediumGray} />
@@ -312,7 +325,7 @@ const ProfileScreen = ({ navigation }) => {
                     </TouchableOpacity>
 
                     {/* Version */}
-                    <Text style={styles.versionText}>Version 1.8</Text>
+                    <Text style={styles.versionText}>Version 1.9</Text>
                 </View>
             </ScrollView>
         </View>
@@ -542,6 +555,36 @@ const styles = StyleSheet.create({
         fontSize: SIZES.small,
         color: COLORS.mediumGray,
         marginTop: SIZES.paddingL,
+    },
+    verifiedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#E8F5E9',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 12,
+        gap: 4,
+        alignSelf: 'center',
+    },
+    verifiedText: {
+        color: '#2E7D32',
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    unverifiedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFEBEE',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 12,
+        gap: 4,
+        alignSelf: 'center',
+    },
+    unverifiedText: {
+        color: '#C62828',
+        fontSize: 10,
+        fontWeight: 'bold',
     },
 });
 

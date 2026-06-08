@@ -49,7 +49,7 @@ const LoginScreen = ({ navigation }) => {
             setLoading(true);
             try {
                 // Instantly login with mock session
-                await login({ phone: fullPhone, name: 'Hari', role: 'customer' });
+                await login({ phone: fullPhone, name: 'Hari', role: 'customer', isVerified: true });
                 return; // Root switch will handle navigation
             } catch (err) {
                 console.error('Bypass error:', err);
@@ -68,14 +68,16 @@ const LoginScreen = ({ navigation }) => {
 
             if (checkResult.success) {
                 if (checkResult.exists) {
-                    // TEMPORARY BYPASS: Generate random OTP and proceed to OTP screen
-                    // const response = await sendOTP(fullPhone); // Commented out Firebase
-                    const mockOtp = Math.floor(100000 + Math.random() * 900000).toString();
-                    Alert.alert(
-                        'OTP Sent',
-                        `Your OTP is: ${mockOtp}`
-                    );
-                    navigation.navigate('OTP', { phoneNumber: fullPhone, mockOtp });
+                    const response = await sendOTP(fullPhone);
+                    if (response.success) {
+                        Alert.alert(
+                            'OTP Sent',
+                            'An OTP verification code has been sent to your mobile number.'
+                        );
+                        navigation.navigate('OTP', { phoneNumber: fullPhone });
+                    } else {
+                        setError(response.message || 'Failed to send OTP. Please try again.');
+                    }
                 } else {
                     // Step 2b: New user — go to Register screen
                     navigation.navigate('Register', { phoneNumber: fullPhone });

@@ -41,6 +41,7 @@ const OTPScreen = ({ route, navigation }) => {
 
     useEffect(() => {
         inputRefs[0].current?.focus();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -88,10 +89,7 @@ const OTPScreen = ({ route, navigation }) => {
         setLoading(true);
 
         try {
-            // Check mock OTP if bypass is active
-            if (route.params?.mockOtp && otpString !== route.params.mockOtp) {
-                throw new Error('Invalid temporary OTP');
-            }
+
 
             // authService verifyOTP handles the backend call automatically
             const response = await verifyOTP(otpString, phoneNumber);
@@ -116,16 +114,12 @@ const OTPScreen = ({ route, navigation }) => {
     const handleResendOTP = async () => {
         setLoading(true);
         try {
-            // TEMPORARY BYPASS: Generate new mock OTP instead of Firebase
-            // await sendOTP(phoneNumber);
-            const newMockOtp = Math.floor(100000 + Math.random() * 900000).toString();
-            navigation.setParams({ mockOtp: newMockOtp });
-            
+            await sendOTP(phoneNumber);
             setOtp(['', '', '', '', '', '']);
             setTimer(30);
             setCanResend(false);
             inputRefs[0].current?.focus();
-            Alert.alert('OTP Resent', `Your new OTP is: ${newMockOtp}`);
+            Alert.alert('OTP Resent', 'A new OTP verification code has been sent to your mobile number.');
         } catch (err) {
             Alert.alert('Error', 'Failed to resend OTP. Please try again.');
         } finally {
@@ -169,12 +163,7 @@ const OTPScreen = ({ route, navigation }) => {
                             </Text>
                             <Text style={styles.phoneNumberText}>{phoneNumber}</Text>
 
-                            {/* MOCK OTP DISPLAY */}
-                            {route.params?.mockOtp && (
-                                <Text style={{ color: 'red', marginTop: 10, fontSize: 16, fontWeight: 'bold' }}>
-                                    Your OTP is: {route.params.mockOtp}
-                                </Text>
-                            )}
+
                         </Animatable.View>
 
 

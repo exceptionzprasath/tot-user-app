@@ -45,7 +45,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 const CartScreen = ({ navigation }) => {
     const { cart, addToCart, removeFromCart, clearCart, getCartTotal, getCartCount } = useCart();
     const { savedLocations } = useLocation();
-    const { user, isFreeTeaEligible } = useAuth();
+    const { user, isFreeTeaEligible, logout } = useAuth();
     const insets = useSafeAreaInsets();
     const extraBottom = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 15 : 0);
     const cartItems = Object.values(cart);
@@ -113,6 +113,7 @@ const CartScreen = ({ navigation }) => {
         return () => {
             if (unsubscribe) unsubscribe();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pendingOrderId]);
 
     // Handle deep link redirect back to app
@@ -156,6 +157,7 @@ const CartScreen = ({ navigation }) => {
         return () => {
             subscription.remove();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pendingOrderId]);
 
     const requestLocationPermission = async () => {
@@ -205,6 +207,24 @@ const CartScreen = ({ navigation }) => {
 
     const handlePlaceOrder = async () => {
         if (cartItems.length === 0) return;
+
+        if (!user || !user.isVerified) {
+            Alert.alert(
+                'Verification Required',
+                'You must verify your mobile number before placing an order. Would you like to log out and log in again to verify your number?',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Log Out',
+                        style: 'destructive',
+                        onPress: async () => {
+                            await logout();
+                        }
+                    }
+                ]
+            );
+            return;
+        }
 
         setIsOrdering(true);
         setOrderStep('fetching');
