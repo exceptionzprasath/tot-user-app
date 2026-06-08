@@ -32,6 +32,12 @@ import api from '../../services/api'; // Added api import here
 
 const { width } = Dimensions.get('window');
 const STATUSBAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight : 0;
+const ITEM_WIDTH = 55;
+const getItemLayout = (data, index) => ({
+    length: ITEM_WIDTH,
+    offset: ITEM_WIDTH * index,
+    index,
+});
 
 // Premium Swapping Title Component
 const SwappingTitle = () => {
@@ -249,12 +255,26 @@ const MenuScreen = ({ navigation }) => {
     const { cart, addToCart, removeFromCart, getCartCount, getCartTotal } = useCart();
     const { isFreeTeaEligible, user } = useAuth(); // Added user here
     
-        // Bulk Order States
         const [locationCoords, setLocationCoords] = useState(null);
         const [isBulkModalVisible, setIsBulkModalVisible] = useState(false);
-        const [bulkCount, setBulkCount] = useState('');
+        const [bulkCount, setBulkCount] = useState('0');
         const [bulkLocationAddress, setBulkLocationAddress] = useState('');
         const [bulkCoords, setBulkCoords] = useState(null);
+
+        const flatListRef = useRef(null);
+        const countPresets = useMemo(() => [10, 20, 30, 50, 100, 150, 200, 250, 300, 400, 500, 750, 1000], []);
+        const countOptions = useMemo(() => Array.from({ length: 1001 }, (_, i) => i), []);
+
+        const selectCount = (val) => {
+            setBulkCount(val.toString());
+            try {
+                flatListRef.current?.scrollToIndex({
+                    index: val,
+                    animated: true,
+                    viewPosition: 0.5
+                });
+            } catch (e) {}
+        };
         const [isPlacingBulkOrder, setIsPlacingBulkOrder] = useState(false);
         const [selectedBulkDate, setSelectedBulkDate] = useState('');
         const [selectedBulkTime, setSelectedBulkTime] = useState('11:00 AM');
@@ -412,7 +432,7 @@ const MenuScreen = ({ navigation }) => {
     };
 
     const handleOpenBulkModal = () => {
-        setBulkCount('');
+        setBulkCount('0');
         setBulkLocationAddress(currentLocation && currentLocation !== 'Fetching location...' && currentLocation !== 'Location unavailable' && currentLocation !== 'Permission Denied' ? currentLocation : '');
         setBulkCoords(locationCoords);
         
@@ -424,6 +444,17 @@ const MenuScreen = ({ navigation }) => {
         setCustomBulkTime('');
         
         setIsBulkModalVisible(true);
+
+        // Scroll to index 0 with a slight delay once modal renders
+        setTimeout(() => {
+            try {
+                flatListRef.current?.scrollToIndex({
+                    index: 0,
+                    animated: false,
+                    viewPosition: 0.5
+                });
+            } catch (e) {}
+        }, 350);
     };
 
     const handleFetchBulkLocation = () => {
@@ -801,16 +832,84 @@ const MenuScreen = ({ navigation }) => {
 
                             {/* Form Inputs */}
                             <View style={styles.modalForm}>
-                                {/* Quantity Input */}
+                                {/* Quantity Selector */}
                                 <Text style={styles.inputLabel}>Order Count (Number of Teas)</Text>
-                                <TextInput
-                                    style={styles.textInput}
-                                    placeholder="Enter number of teas (min 10)"
-                                    placeholderTextColor={COLORS.mediumGray}
-                                    keyboardType="numeric"
-                                    value={bulkCount}
-                                    onChangeText={(text) => setBulkCount(text.replace(/[^0-9]/g, ''))}
-                                />
+                                
+                                {/* Quick Presets */}
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                                    {countPresets.map((preset) => {
+                                        const isSelected = parseInt(bulkCount) === preset;
+                                        return (
+                                            <TouchableOpacity
+                                                key={preset}
+                                                style={{
+                                                    paddingHorizontal: 10,
+                                                    paddingVertical: 6,
+                                                    borderRadius: 8,
+                                                    borderWidth: 1,
+                                                    borderColor: isSelected ? COLORS.primary : COLORS.mediumGray + '35',
+                                                    backgroundColor: isSelected ? COLORS.primary + '15' : COLORS.white,
+                                                }}
+                                                onPress={() => selectCount(preset)}
+                                                activeOpacity={0.7}
+                                            >
+                                                <Text style={{
+                                                    fontSize: 11,
+                                                    fontWeight: '800',
+                                                    color: isSelected ? COLORS.primary : COLORS.textSecondary
+                                                }}>{preset}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+
+                                {/* Scroll Wheel FlatList */}
+                                <View style={{ 
+                                    borderWidth: 1.5, 
+                                    borderColor: COLORS.lightGray, 
+                                    borderRadius: 12, 
+                                    paddingVertical: 10, 
+                                    backgroundColor: '#F9F9F9',
+                                    marginBottom: 16
+                                }}>
+                                    <FlatList
+                                        ref={flatListRef}
+                                        horizontal
+                                        data={countOptions}
+                                        keyExtractor={(item) => item.toString()}
+                                        showsHorizontalScrollIndicator={false}
+                                        getItemLayout={getItemLayout}
+                                        contentContainerStyle={{ paddingHorizontal: (width - ITEM_WIDTH) / 2 - 20 }}
+                                        renderItem={({ item }) => {
+                                            const isSelected = parseInt(bulkCount) === item;
+                                            return (
+                                                <TouchableOpacity
+                                                    style={{
+                                                        width: ITEM_WIDTH,
+                                                        height: ITEM_WIDTH,
+                                                        borderRadius: ITEM_WIDTH / 2,
+                                                        justifyContent: 'center',
+                                                        alignItems: 'center',
+                                                        backgroundColor: isSelected ? COLORS.primary : 'transparent',
+                                                        borderWidth: isSelected ? 0 : 1,
+                                                        borderColor: isSelected ? 'transparent' : COLORS.mediumGray + '25',
+                                                        marginHorizontal: 4,
+                                                    }}
+                                                    onPress={() => selectCount(item)}
+                                                    activeOpacity={0.7}
+                                                >
+                                                    <Text style={{
+                                                        fontSize: SIZES.regular,
+                                                        fontWeight: '800',
+                                                        color: isSelected ? COLORS.white : COLORS.textPrimary
+                                                    }}>
+                                                        {item}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            );
+                                        }}
+                                    />
+                                </View>
 
                                 {/* Expected Delivery Date Selector */}
                                 <Text style={styles.inputLabel}>Expected Delivery Date</Text>

@@ -88,7 +88,7 @@ const CartScreen = ({ navigation }) => {
     const [pendingOrderId, setPendingOrderId] = React.useState(null);
     const [paymentStatus, setPaymentStatus] = React.useState('none'); // 'none' | 'initiating' | 'waiting' | 'failed'
     const [checkoutUrl, setCheckoutUrl] = React.useState('');
-    const [paymentMethod, setPaymentMethod] = React.useState('ONLINE'); // 'ONLINE' | 'COD'
+    const [paymentMethod, setPaymentMethod] = React.useState(null); // null | 'ONLINE' | 'COD'
 
     // Real-time Firestore event listener for payment success
     React.useEffect(() => {
@@ -560,6 +560,27 @@ const CartScreen = ({ navigation }) => {
                                                 </View>
                                             </View>
 
+                                            {/* Payment Method Selection */}
+                                            <View style={styles.paymentMethodSelection}>
+                                                <Text style={styles.paymentMethodTitle}>Select Payment Method:</Text>
+                                                <View style={styles.paymentMethodList}>
+                                                    <TouchableOpacity 
+                                                        style={[styles.paymentMethodChip, paymentMethod === 'ONLINE' && styles.paymentMethodChipActive]}
+                                                        onPress={() => setPaymentMethod('ONLINE')}
+                                                    >
+                                                        <Icon name="card-outline" size={16} color={paymentMethod === 'ONLINE' ? COLORS.white : COLORS.primary} />
+                                                        <Text style={[styles.paymentMethodChipText, paymentMethod === 'ONLINE' && styles.paymentMethodChipTextActive]}>Pay Online</Text>
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity 
+                                                        style={[styles.paymentMethodChip, paymentMethod === 'COD' && styles.paymentMethodChipActive]}
+                                                        onPress={() => setPaymentMethod('COD')}
+                                                    >
+                                                        <Icon name="cash-outline" size={16} color={paymentMethod === 'COD' ? COLORS.white : COLORS.primary} />
+                                                        <Text style={[styles.paymentMethodChipText, paymentMethod === 'COD' && styles.paymentMethodChipTextActive]}>COD (Cash)</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+
                                             {/* Live Riders Map (Between Payment Selection and Delivery Info) */}
                                             <View style={{
                                                 marginTop: 15,
@@ -746,10 +767,10 @@ const CartScreen = ({ navigation }) => {
                                             <TouchableOpacity
                                                 style={[
                                                     styles.confirmButton,
-                                                    (isFetchingInfo || nearbyRiders.length === 0) && { backgroundColor: COLORS.mediumGray, opacity: 0.7 }
+                                                    (isFetchingInfo || nearbyRiders.length === 0 || !paymentMethod) && { backgroundColor: COLORS.mediumGray, opacity: 0.7 }
                                                 ]}
                                                 onPress={finalizeOrder}
-                                                disabled={isFetchingInfo || nearbyRiders.length === 0}
+                                                disabled={isFetchingInfo || nearbyRiders.length === 0 || !paymentMethod}
                                             >
                                                 {isFetchingInfo ? (
                                                     <ActivityIndicator color={COLORS.white} />
@@ -757,6 +778,11 @@ const CartScreen = ({ navigation }) => {
                                                     <>
                                                         <Text style={styles.confirmButtonText}>No Riders Nearby (Min 2km)</Text>
                                                         <Icon name="alert-circle-outline" size={20} color={COLORS.white} />
+                                                    </>
+                                                ) : !paymentMethod ? (
+                                                    <>
+                                                        <Text style={styles.confirmButtonText}>Select Payment Method</Text>
+                                                        <Icon name="wallet-outline" size={20} color={COLORS.white} />
                                                     </>
                                                 ) : (
                                                     <>
