@@ -39,7 +39,7 @@ export const MOCK_MENU = [
         id: 'item_002',
         name: 'Flask Tea',
         category: 'tea',
-        price: 120,
+        price: 140,
         image: require('../assets/flask-tea.jpeg'),
         description: 'Serves 10 tea',
         available: true,

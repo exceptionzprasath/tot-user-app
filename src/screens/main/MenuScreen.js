@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
     View,
     Text,
@@ -14,6 +14,8 @@ import {
     Image,
     Animated,
     PermissionsAndroid,
+    Modal,
+    ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Geolocation from 'react-native-geolocation-service';
@@ -26,6 +28,7 @@ import { getMenuItems } from '../../services/mockMenuService';
 import { useFavorites } from '../../context/FavoritesContext';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../services/api'; // Added api import here
 
 const { width } = Dimensions.get('window');
 const STATUSBAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight : 0;
@@ -225,6 +228,14 @@ const categories = [
     // { id: 'snacks', name: 'Snacks', icon: 'fast-food-outline' },
 ];
 
+const formatLocalDateToYYYYMMDD = (date) => {
+    if (!date) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 const MenuScreen = ({ navigation }) => {
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [menuItems, setMenuItems] = useState([]);
@@ -236,7 +247,65 @@ const MenuScreen = ({ navigation }) => {
     const [isLocating, setIsLocating] = useState(false);
     const { isFavorite, toggleFavorite } = useFavorites();
     const { cart, addToCart, removeFromCart, getCartCount, getCartTotal } = useCart();
-    const { isFreeTeaEligible } = useAuth();
+    const { isFreeTeaEligible, user } = useAuth(); // Added user here
+    
+        // Bulk Order States
+        const [locationCoords, setLocationCoords] = useState(null);
+        const [isBulkModalVisible, setIsBulkModalVisible] = useState(false);
+        const [bulkCount, setBulkCount] = useState('');
+        const [bulkLocationAddress, setBulkLocationAddress] = useState('');
+        const [bulkCoords, setBulkCoords] = useState(null);
+        const [isPlacingBulkOrder, setIsPlacingBulkOrder] = useState(false);
+        const [selectedBulkDate, setSelectedBulkDate] = useState('');
+        const [selectedBulkTime, setSelectedBulkTime] = useState('11:00 AM');
+        const [customBulkTime, setCustomBulkTime] = useState('');
+        const [isCalendarVisible, setIsCalendarVisible] = useState(false);
+        const [currentCalendarMonth, setCurrentCalendarMonth] = useState(new Date());
+
+        const handlePrevMonth = () => {
+            setCurrentCalendarMonth(prev => {
+                const newMonth = new Date(prev);
+                newMonth.setMonth(newMonth.getMonth() - 1);
+                return newMonth;
+            });
+        };
+
+        const handleNextMonth = () => {
+            setCurrentCalendarMonth(prev => {
+                const newMonth = new Date(prev);
+                newMonth.setMonth(newMonth.getMonth() + 1);
+                return newMonth;
+            });
+        };
+
+        const generateCalendarDays = () => {
+            const year = currentCalendarMonth.getFullYear();
+            const month = currentCalendarMonth.getMonth();
+            const firstDay = new Date(year, month, 1);
+            const startDayIndex = firstDay.getDay();
+            const totalDays = new Date(year, month + 1, 0).getDate();
+            
+            const days = [];
+            for (let i = 0; i < startDayIndex; i++) {
+                days.push(null);
+            }
+            for (let d = 1; d <= totalDays; d++) {
+                days.push(new Date(year, month, d));
+            }
+            return days;
+        };
+
+        const formatDateString = (dateStr) => {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return `${weekdayNames[date.getDay()]}, ${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+        };
+
+        const timeSlots = [
+            '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM', '06:00 PM', '07:00 PM', 'custom'
+        ];
 
     useEffect(() => {
         requestLocationPermission();
@@ -295,6 +364,7 @@ const MenuScreen = ({ navigation }) => {
         Geolocation.getCurrentPosition(
             (position) => {
                 const { latitude, longitude } = position.coords;
+                setLocationCoords({ latitude, longitude });
                 reverseGeocode(latitude, longitude);
             },
             (error) => {
@@ -303,6 +373,7 @@ const MenuScreen = ({ navigation }) => {
                 Geolocation.getCurrentPosition(
                     (position) => {
                         const { latitude, longitude } = position.coords;
+                        setLocationCoords({ latitude, longitude });
                         reverseGeocode(latitude, longitude);
                     },
                     (fallbackError) => {
@@ -338,6 +409,132 @@ const MenuScreen = ({ navigation }) => {
 
     const handleCheckout = () => {
         navigation.navigate('Cart');
+    };
+
+    const handleOpenBulkModal = () => {
+        setBulkCount('');
+        setBulkLocationAddress(currentLocation && currentLocation !== 'Fetching location...' && currentLocation !== 'Location unavailable' && currentLocation !== 'Permission Denied' ? currentLocation : '');
+        setBulkCoords(locationCoords);
+        
+        // Default to tomorrow's date
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        setSelectedBulkDate(formatLocalDateToYYYYMMDD(tomorrow));
+        setSelectedBulkTime('11:00 AM');
+        setCustomBulkTime('');
+        
+        setIsBulkModalVisible(true);
+    };
+
+    const handleFetchBulkLocation = () => {
+        if (!Geolocation) {
+            Alert.alert('Error', 'Geolocation module is unavailable.');
+            return;
+        }
+
+        const performFetch = (highAccuracy) => {
+            Geolocation.getCurrentPosition(
+                async (position) => {
+                    const { latitude, longitude } = position.coords;
+                    setBulkCoords({ latitude, longitude });
+                    try {
+                        const response = await fetch(
+                            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=AIzaSyAs3nkKoCsndZiXeV6oh0PvRLL7FpMiZ4k`
+                        );
+                        const data = await response.json();
+                        if (data.results && data.results.length > 0) {
+                            setBulkLocationAddress(data.results[0].formatted_address);
+                        } else {
+                            setBulkLocationAddress('GPS Location Coordinates Captured');
+                        }
+                    } catch (err) {
+                        setBulkLocationAddress('GPS Location Coordinates Captured');
+                    }
+                },
+                (error) => {
+                    if (highAccuracy) {
+                        console.log('Bulk Modal high accuracy fetch failed, retrying low accuracy...');
+                        performFetch(false);
+                    } else {
+                        Alert.alert('Location Error', 'Unable to fetch location. Please type your address manually.');
+                    }
+                },
+                { enableHighAccuracy: highAccuracy, timeout: 8000, maximumAge: 30000 }
+            );
+        };
+
+        performFetch(true);
+    };
+
+    const handlePlaceBulkOrder = async () => {
+        const count = parseInt(bulkCount);
+        if (!count || count < 10) {
+            Alert.alert('Invalid Count', 'Minimum bulk order is 10 teas.');
+            return;
+        }
+        if (!selectedBulkDate) {
+            Alert.alert('Date Required', 'Please select a delivery date.');
+            return;
+        }
+        const timeVal = selectedBulkTime === 'custom' ? customBulkTime : selectedBulkTime;
+        if (!timeVal || !timeVal.trim()) {
+            Alert.alert('Time Required', 'Please select or enter a delivery time.');
+            return;
+        }
+        if (!bulkLocationAddress.trim()) {
+            Alert.alert('Location Required', 'Please enter a delivery address.');
+            return;
+        }
+
+        setIsPlacingBulkOrder(true);
+
+        try {
+            const orderId = 'ORD' + Math.floor(100000 + Math.random() * 900000);
+            const orderData = {
+                id: orderId,
+                items: [
+                    {
+                        id: 'item_002',
+                        name: 'Tea (Bulk)',
+                        price: 13,
+                        quantity: count
+                    }
+                ],
+                totalAmount: count * 13,
+                deliveryAddress: bulkLocationAddress,
+                locationCoords: bulkCoords || { latitude: 0, longitude: 0 },
+                customerLocation: {
+                    latitude: bulkCoords?.latitude || 0,
+                    longitude: bulkCoords?.longitude || 0,
+                    address: bulkLocationAddress
+                },
+                customerName: user?.name || 'Customer',
+                customerPhone: user?.phone,
+                paymentMethod: 'COD',
+                isBulk: true,
+                deliveryDate: selectedBulkDate,
+                deliveryTime: timeVal
+            };
+
+            const response = await api.post('/orders', orderData);
+
+            if (response.data.success) {
+                setIsBulkModalVisible(false);
+                setBulkCount('');
+                setBulkLocationAddress('');
+                setBulkCoords(null);
+                
+                // Navigate to track order
+                navigation.navigate('TrackOrder', { order: response.data.order || response.data.data });
+            } else {
+                Alert.alert('Order Failed', response.data.message || 'Failed to place bulk order.');
+            }
+        } catch (error) {
+            console.error('Error placing bulk order:', error);
+            Alert.alert('Network Error', 'Could not reach server. Please try again.');
+        } finally {
+            setIsPlacingBulkOrder(false);
+        }
     };
 
     const renderLocationBar = () => (
@@ -483,6 +680,35 @@ const MenuScreen = ({ navigation }) => {
         </View>
     );
 
+    const renderListFooter = () => {
+        const hasFlaskTea = filteredItems.some(item => item.id === 'item_002');
+        if (!hasFlaskTea) return null;
+
+        return (
+            <Animatable.View
+                animation="fadeInUp"
+                delay={100}
+                style={styles.bulkSectionCard}
+            >
+                <View style={styles.bulkSectionHeader}>
+                    <Icon name="cube" size={22} color={COLORS.primary} />
+                    <Text style={styles.bulkSectionTitle}>Corporate & Event Bulk Orders</Text>
+                </View>
+                <Text style={styles.bulkSectionDescription}>
+                    Hosting an event or meeting? Order tea in bulk (min 10 teas) and select your expected date and time for hot, fresh delivery.
+                </Text>
+                <TouchableOpacity
+                    style={styles.bulkSectionButton}
+                    onPress={() => handleOpenBulkModal()}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.bulkSectionButtonText}>Order Bulk Tea</Text>
+                    <Icon name="calendar-outline" size={16} color={COLORS.white} style={{ marginLeft: 6 }} />
+                </TouchableOpacity>
+            </Animatable.View>
+        );
+    };
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.darkBg} translucent />
@@ -502,6 +728,7 @@ const MenuScreen = ({ navigation }) => {
                         contentContainerStyle={filteredItems.length === 0 ? styles.emptyListContent : [styles.listContent, getCartCount() > 0 && { paddingBottom: 180 }]}
                         ListHeaderComponent={renderListHeader}
                         ListEmptyComponent={renderEmpty}
+                        ListFooterComponent={renderListFooter}
                         renderItem={({ item, index }) => (
                             <Animatable.View
                                 animation="fadeInUp"
@@ -545,6 +772,228 @@ const MenuScreen = ({ navigation }) => {
                     </TouchableOpacity>
                 </Animatable.View>
             )}
+
+            {/* Event Bulk Order Modal */}
+            <Modal
+                visible={isBulkModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setIsBulkModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        {/* Header */}
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>🍵 Event Bulk Order</Text>
+                            <TouchableOpacity
+                                style={styles.closeModalButton}
+                                onPress={() => setIsBulkModalVisible(false)}
+                            >
+                                <Icon name="close" size={24} color={COLORS.textPrimary} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+                            {/* Description */}
+                            <Text style={styles.modalDescription}>
+                                Order Tea in bulk for your corporate meetings, celebrations or gatherings. Minimum order is 10 teas.
+                            </Text>
+
+                            {/* Form Inputs */}
+                            <View style={styles.modalForm}>
+                                {/* Quantity Input */}
+                                <Text style={styles.inputLabel}>Order Count (Number of Teas)</Text>
+                                <TextInput
+                                    style={styles.textInput}
+                                    placeholder="Enter number of teas (min 10)"
+                                    placeholderTextColor={COLORS.mediumGray}
+                                    keyboardType="numeric"
+                                    value={bulkCount}
+                                    onChangeText={(text) => setBulkCount(text.replace(/[^0-9]/g, ''))}
+                                />
+
+                                {/* Expected Delivery Date Selector */}
+                                <Text style={styles.inputLabel}>Expected Delivery Date</Text>
+                                <TouchableOpacity
+                                    style={styles.dateSelectorBtn}
+                                    onPress={() => setIsCalendarVisible(true)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Icon name="calendar-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
+                                    <Text style={styles.dateSelectorBtnText}>
+                                        {selectedBulkDate ? formatDateString(selectedBulkDate) : 'Select Delivery Date'}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                {/* Expected Delivery Time Selector */}
+                                <Text style={styles.inputLabel}>Expected Delivery Time</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsContainer} contentContainerStyle={{ gap: 8, paddingBottom: 12 }}>
+                                    {timeSlots.map((slot) => {
+                                        const isSelected = selectedBulkTime === slot;
+                                        return (
+                                            <TouchableOpacity
+                                                key={slot}
+                                                style={[styles.timeChip, isSelected && styles.chipActive]}
+                                                onPress={() => setSelectedBulkTime(slot)}
+                                                activeOpacity={0.7}
+                                            >
+                                                <Text style={[styles.timeChipText, isSelected && styles.chipMainTextActive]}>
+                                                    {slot === 'custom' ? 'Custom Time' : slot}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </ScrollView>
+
+                                {selectedBulkTime === 'custom' && (
+                                    <TextInput
+                                        style={styles.textInput}
+                                        placeholder="e.g. 10:30 AM, 02:45 PM"
+                                        placeholderTextColor={COLORS.mediumGray}
+                                        value={customBulkTime}
+                                        onChangeText={setCustomBulkTime}
+                                    />
+                                )}
+
+                                {/* Location Input */}
+                                <Text style={styles.inputLabel}>Delivery Location</Text>
+                                <View style={styles.locationInputContainer}>
+                                    <TextInput
+                                        style={[styles.textInput, styles.locationInput]}
+                                        placeholder="Enter complete delivery address"
+                                        placeholderTextColor={COLORS.mediumGray}
+                                        multiline
+                                        numberOfLines={3}
+                                        value={bulkLocationAddress}
+                                        onChangeText={setBulkLocationAddress}
+                                    />
+                                    <TouchableOpacity
+                                        style={styles.gpsButton}
+                                        onPress={handleFetchBulkLocation}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Icon name="locate" size={20} color={COLORS.primary} />
+                                        <Text style={styles.gpsButtonText}>Use GPS Location</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            {/* Cost & Summary */}
+                            <View style={styles.modalCostContainer}>
+                                <Text style={styles.costLabel}>Price per tea:</Text>
+                                <Text style={styles.costValue}>₹13 / tea</Text>
+                            </View>
+                            <View style={[styles.modalCostContainer, { borderTopWidth: 1, borderTopColor: COLORS.lightGray, paddingTop: 10 }]}>
+                                <Text style={styles.totalLabel}>Total Estimated Cost:</Text>
+                                <Text style={styles.totalValue}>₹{(parseInt(bulkCount) || 0) * 13}</Text>
+                            </View>
+                        </ScrollView>
+
+                        {/* Order Now Button */}
+                        <TouchableOpacity
+                            style={[
+                                styles.orderNowButton,
+                                (!bulkCount || parseInt(bulkCount) < 10 || !bulkLocationAddress.trim() || isPlacingBulkOrder) && styles.orderNowButtonDisabled
+                            ]}
+                            onPress={handlePlaceBulkOrder}
+                            disabled={!bulkCount || parseInt(bulkCount) < 10 || !bulkLocationAddress.trim() || isPlacingBulkOrder}
+                            activeOpacity={0.8}
+                        >
+                            {isPlacingBulkOrder ? (
+                                <ActivityIndicator size="small" color={COLORS.white} />
+                            ) : (
+                                <>
+                                    <Text style={styles.orderNowButtonText}>Order Now</Text>
+                                    <Icon name="arrow-forward" size={18} color={COLORS.white} style={{ marginLeft: 8 }} />
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Calendar Modal */}
+            <Modal
+                visible={isCalendarVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setIsCalendarVisible(false)}
+            >
+                <View style={styles.calendarModalOverlay}>
+                    <View style={styles.calendarModalContent}>
+                        {/* Header */}
+                        <View style={styles.calendarHeader}>
+                            <TouchableOpacity onPress={handlePrevMonth} style={styles.calendarNavBtn}>
+                                <Icon name="chevron-back" size={20} color={COLORS.textPrimary} style={{ marginTop: Platform.OS === 'ios' ? 0 : 0 }} />
+                            </TouchableOpacity>
+                            <Text style={styles.calendarMonthTitle}>
+                                {currentCalendarMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                            </Text>
+                            <TouchableOpacity onPress={handleNextMonth} style={styles.calendarNavBtn}>
+                                <Icon name="chevron-forward" size={20} color={COLORS.textPrimary} />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Weekdays Row */}
+                        <View style={styles.calendarWeekdaysRow}>
+                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
+                                <Text key={idx} style={styles.calendarWeekdayText}>{day}</Text>
+                            ))}
+                        </View>
+
+                        {/* Days Grid */}
+                        <View style={styles.calendarDaysGrid}>
+                            {generateCalendarDays().map((dayObj, index) => {
+                                if (!dayObj) {
+                                    return <View key={`empty-${index}`} style={styles.calendarDayCellEmpty} />;
+                                }
+                                
+                                const isToday = new Date().toDateString() === dayObj.toDateString();
+                                const isSelected = selectedBulkDate === formatLocalDateToYYYYMMDD(dayObj);
+                                
+                                // Disable past days
+                                const todayDate = new Date();
+                                todayDate.setHours(0,0,0,0);
+                                const isPast = dayObj < todayDate;
+                                
+                                return (
+                                    <TouchableOpacity
+                                        key={dayObj.toISOString()}
+                                        style={[
+                                            styles.calendarDayCell,
+                                            isSelected && styles.calendarDayCellSelected,
+                                            isToday && !isSelected && styles.calendarDayCellToday,
+                                            isPast && styles.calendarDayCellDisabled
+                                        ]}
+                                        disabled={isPast}
+                                        onPress={() => {
+                                            setSelectedBulkDate(formatLocalDateToYYYYMMDD(dayObj));
+                                            setIsCalendarVisible(false);
+                                        }}
+                                    >
+                                        <Text style={[
+                                            styles.calendarDayText,
+                                            isSelected && styles.calendarDayTextSelected,
+                                            isPast && styles.calendarDayTextDisabled,
+                                            isToday && !isSelected && styles.calendarDayTextToday
+                                        ]}>
+                                            {dayObj.getDate()}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+
+                        {/* Close Button */}
+                        <TouchableOpacity
+                            style={styles.calendarCloseBtn}
+                            onPress={() => setIsCalendarVisible(false)}
+                        >
+                            <Text style={styles.calendarCloseBtnText}>Close</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -884,6 +1333,341 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: COLORS.textPrimary,
         marginTop: 1,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: COLORS.white,
+        borderTopLeftRadius: SIZES.radiusLarge * 1.5,
+        borderTopRightRadius: SIZES.radiusLarge * 1.5,
+        padding: SIZES.padding,
+        paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    modalTitle: {
+        fontSize: SIZES.xlarge,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    closeModalButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: COLORS.lightGray,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalDescription: {
+        fontSize: SIZES.small + 1,
+        color: COLORS.textSecondary,
+        lineHeight: 20,
+        marginBottom: 20,
+    },
+    modalForm: {
+        marginBottom: 20,
+    },
+    inputLabel: {
+        fontSize: SIZES.medium,
+        fontWeight: '600',
+        color: COLORS.textPrimary,
+        marginBottom: 8,
+    },
+    textInput: {
+        backgroundColor: COLORS.lightGray,
+        borderRadius: SIZES.radius,
+        padding: SIZES.paddingS * 1.5,
+        fontSize: SIZES.regular,
+        color: COLORS.textPrimary,
+        borderWidth: 1,
+        borderColor: COLORS.gray,
+        marginBottom: 16,
+    },
+    locationInputContainer: {
+        flexDirection: 'column',
+    },
+    locationInput: {
+        minHeight: 80,
+        textAlignVertical: 'top',
+        marginBottom: 8,
+    },
+    gpsButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 10,
+        borderRadius: SIZES.radius,
+        borderWidth: 1,
+        borderColor: COLORS.primary,
+        backgroundColor: COLORS.primary + '0A',
+    },
+    gpsButtonText: {
+        marginLeft: 6,
+        color: COLORS.primary,
+        fontWeight: '600',
+        fontSize: SIZES.medium,
+    },
+    modalCostContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    costLabel: {
+        fontSize: SIZES.regular,
+        color: COLORS.textSecondary,
+    },
+    costValue: {
+        fontSize: SIZES.regular,
+        fontWeight: '600',
+        color: COLORS.textPrimary,
+    },
+    totalLabel: {
+        fontSize: SIZES.regular,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    totalValue: {
+        fontSize: SIZES.xlarge,
+        fontWeight: 'bold',
+        color: COLORS.primary,
+    },
+    orderNowButton: {
+        backgroundColor: COLORS.primary,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 14,
+        borderRadius: SIZES.radius,
+        marginTop: 20,
+        ...SHADOWS.medium,
+    },
+    orderNowButtonDisabled: {
+        backgroundColor: COLORS.gray,
+    },
+    orderNowButtonText: {
+        color: COLORS.white,
+        fontSize: SIZES.regular,
+        fontWeight: 'bold',
+    },
+    bulkSectionCard: {
+        backgroundColor: COLORS.white,
+        borderRadius: SIZES.radius,
+        padding: SIZES.padding,
+        marginHorizontal: SIZES.padding,
+        marginBottom: SIZES.paddingS,
+        marginTop: 4,
+        borderWidth: 1,
+        borderColor: COLORS.primary + '20',
+        ...SHADOWS.small,
+    },
+    bulkSectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+        gap: 8,
+    },
+    bulkSectionTitle: {
+        fontSize: SIZES.medium + 1,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    bulkSectionDescription: {
+        fontSize: SIZES.small,
+        color: COLORS.textSecondary,
+        lineHeight: 18,
+        marginBottom: 12,
+    },
+    bulkSectionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: COLORS.primary,
+        paddingVertical: 10,
+        borderRadius: SIZES.radius,
+        ...SHADOWS.small,
+    },
+    bulkSectionButtonText: {
+        color: COLORS.white,
+        fontWeight: 'bold',
+        fontSize: SIZES.small + 1,
+    },
+    chipsContainer: {
+        marginBottom: 12,
+        flexDirection: 'row',
+    },
+    chip: {
+        backgroundColor: COLORS.lightGray,
+        borderRadius: SIZES.radius,
+        borderWidth: 1,
+        borderColor: COLORS.gray,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 80,
+    },
+    chipActive: {
+        backgroundColor: COLORS.primary,
+        borderColor: COLORS.primary,
+    },
+    chipMainText: {
+        fontSize: SIZES.small + 1,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+        marginTop: 2,
+    },
+    chipMainTextActive: {
+        color: COLORS.white,
+    },
+    chipSubText: {
+        fontSize: SIZES.xs,
+        color: COLORS.mediumGray,
+        textTransform: 'uppercase',
+    },
+    chipSubTextActive: {
+        color: 'rgba(255, 255, 255, 0.8)',
+    },
+    timeChip: {
+        backgroundColor: COLORS.lightGray,
+        borderRadius: SIZES.radius,
+        borderWidth: 1,
+        borderColor: COLORS.gray,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    timeChipText: {
+        fontSize: SIZES.small + 1,
+        fontWeight: '600',
+        color: COLORS.textPrimary,
+    },
+    dateSelectorBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.lightGray,
+        borderRadius: SIZES.radius,
+        borderWidth: 1,
+        borderColor: COLORS.gray,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        marginBottom: 16,
+    },
+    dateSelectorBtnText: {
+        fontSize: SIZES.regular,
+        color: COLORS.textPrimary,
+        fontWeight: '600',
+    },
+    calendarModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    calendarModalContent: {
+        backgroundColor: COLORS.white,
+        borderRadius: SIZES.radiusLarge,
+        padding: 20,
+        width: '100%',
+        maxWidth: 340,
+        ...SHADOWS.large,
+    },
+    calendarHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 15,
+    },
+    calendarMonthTitle: {
+        fontSize: SIZES.medium + 1,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    calendarNavBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: COLORS.lightGray,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    calendarWeekdaysRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 10,
+    },
+    calendarWeekdayText: {
+        width: 38,
+        textAlign: 'center',
+        fontSize: SIZES.small,
+        fontWeight: 'bold',
+        color: COLORS.mediumGray,
+    },
+    calendarDaysGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        gap: 4,
+    },
+    calendarDayCell: {
+        width: 38,
+        height: 38,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 19,
+        marginBottom: 4,
+    },
+    calendarDayCellEmpty: {
+        width: 38,
+        height: 38,
+        marginBottom: 4,
+    },
+    calendarDayCellSelected: {
+        backgroundColor: COLORS.primary,
+    },
+    calendarDayCellToday: {
+        borderWidth: 1.5,
+        borderColor: COLORS.primary,
+    },
+    calendarDayCellDisabled: {
+        opacity: 0.3,
+    },
+    calendarDayText: {
+        fontSize: SIZES.small + 1,
+        fontWeight: '500',
+        color: COLORS.textPrimary,
+    },
+    calendarDayTextSelected: {
+        color: COLORS.white,
+        fontWeight: 'bold',
+    },
+    calendarDayTextToday: {
+        color: COLORS.primary,
+        fontWeight: 'bold',
+    },
+    calendarDayTextDisabled: {
+        color: COLORS.mediumGray,
+    },
+    calendarCloseBtn: {
+        marginTop: 15,
+        backgroundColor: COLORS.lightGray,
+        paddingVertical: 10,
+        borderRadius: SIZES.radius,
+        alignItems: 'center',
+    },
+    calendarCloseBtnText: {
+        color: COLORS.textPrimary,
+        fontWeight: 'bold',
+        fontSize: SIZES.regular,
     },
 });
 

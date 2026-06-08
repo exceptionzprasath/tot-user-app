@@ -154,9 +154,6 @@ const ProfileScreen = ({ navigation }) => {
                                 <View style={styles.taglineLine} />
                             </View>
                         </View>
-                        <TouchableOpacity style={styles.settingsButton}>
-                            <Icon name="settings-outline" size={22} color={COLORS.white} />
-                        </TouchableOpacity>
                     </View>
                 </View>
 
@@ -315,7 +312,7 @@ const ProfileScreen = ({ navigation }) => {
                     </TouchableOpacity>
 
                     {/* Version */}
-                    <Text style={styles.versionText}>Version 1.0.0</Text>
+                    <Text style={styles.versionText}>Version 1.8</Text>
                 </View>
             </ScrollView>
         </View>
@@ -360,14 +357,6 @@ const styles = StyleSheet.create({
         fontSize: SIZES.small,
         color: COLORS.secondary,
         fontStyle: 'italic',
-    },
-    settingsButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: 'rgba(255,255,255,0.15)',
-        justifyContent: 'center',
-        alignItems: 'center',
     },
     content: {
         paddingHorizontal: SIZES.padding,

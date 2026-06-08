@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { StatusBar, Platform, PermissionsAndroid } from 'react-native';
+import { StatusBar, Platform, PermissionsAndroid, Modal, View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import messaging from '@react-native-firebase/messaging';
@@ -40,10 +40,12 @@ const AppContent = () => {
   const [isUpdateRequired, setIsUpdateRequired] = React.useState(false);
   const [requiredVersion, setRequiredVersion] = React.useState('0.0.1');
   const [playStoreUrl, setPlayStoreUrl] = React.useState('https://play.google.com/store/apps/details?id=com.thambiorutea');
+  const [announcementText, setAnnouncementText] = React.useState('');
+  const [showAnnouncement, setShowAnnouncement] = React.useState(false);
 
-  // Check backend for force updates
+  // Check backend for force updates and announcement configs
   React.useEffect(() => {
-    const checkAppVersion = async () => {
+    const fetchConfigs = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/api/config/app-version`);
         const data = await response.json();
@@ -60,11 +62,26 @@ const AppContent = () => {
           }
         }
       } catch (err) {
-        console.log('[Version Check] Network error or endpoint not yet deployed:', err.message);
+        console.log('[Version Check] Network error:', err.message);
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/config/announcement`);
+        const data = await response.json();
+        
+        if (data && data.success && data.data) {
+          const { active, content } = data.data;
+          if (active && content) {
+            setAnnouncementText(content);
+            setShowAnnouncement(true);
+          }
+        }
+      } catch (err) {
+        console.log('[Announcement Check] Network error:', err.message);
       }
     };
 
-    checkAppVersion();
+    fetchConfigs();
   }, []);
 
   // Handle notifications and permissions sequentially when splash finishes
@@ -132,9 +149,38 @@ const AppContent = () => {
   }
 
   return (
-    <NavigationContainer>
-      {isAuthenticated ? <MainNavigator /> : <AuthNavigator />}
-    </NavigationContainer>
+    <>
+      <NavigationContainer>
+        {isAuthenticated ? <MainNavigator /> : <AuthNavigator />}
+      </NavigationContainer>
+
+      {/* App Announcement Modal */}
+      <Modal
+        visible={showAnnouncement && isSplashDone && !isLoading && !isUpdateRequired}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowAnnouncement(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.announcementContainer}>
+            <View style={styles.iconContainer}>
+              <Text style={styles.iconText}>📢</Text>
+            </View>
+            <Text style={styles.announcementTitle}>Important Announcement</Text>
+            <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={true}>
+              <Text style={styles.announcementContent}>{announcementText}</Text>
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.announcementButton}
+              activeOpacity={0.8}
+              onPress={() => setShowAnnouncement(false)}
+            >
+              <Text style={styles.announcementButtonText}>Ok, Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 };
 
@@ -157,5 +203,77 @@ function App() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  announcementContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 340,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  iconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(211, 47, 47, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  iconText: {
+    fontSize: 28,
+  },
+  announcementTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  scrollView: {
+    maxHeight: 180,
+    width: '100%',
+    marginBottom: 20,
+  },
+  announcementContent: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#4F4F4F',
+    textAlign: 'center',
+  },
+  announcementButton: {
+    backgroundColor: '#D32F2F', // Brand primary red
+    paddingVertical: 14,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#D32F2F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  announcementButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
 
 export default App;

@@ -13,7 +13,7 @@ import { COLORS, SIZES, SHADOWS } from '../utils/colors';
 const { width } = Dimensions.get('window');
 const cardWidth = (width - SIZES.padding * 2 - SIZES.paddingS) / 2;
 
-const ProductCard = ({ item, onAddToCart, onRemoveFromCart, quantity = 0, isFavorite, onToggleFavorite, layout = 'grid', isFreeTeaEligible = false }) => {
+const ProductCard = ({ item, onAddToCart, onRemoveFromCart, quantity = 0, isFavorite, onToggleFavorite, layout = 'grid', isFreeTeaEligible = false, onBulkOrderPress }) => {
     const isList = layout === 'list';
 
     return (
@@ -235,6 +235,21 @@ const styles = StyleSheet.create({
     favoriteButtonList: {
         top: 8,
         left: 8,
+    },
+    bulkButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+        backgroundColor: COLORS.secondary,
+        marginRight: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        ...SHADOWS.small,
+    },
+    bulkButtonText: {
+        color: COLORS.textPrimary,
+        fontSize: SIZES.small,
+        fontWeight: '700',
     },
 });
 

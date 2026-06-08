@@ -44,7 +44,7 @@ const TrackOrderScreen = ({ route, navigation }) => {
         { label: 'Delivered', icon: 'checkmark-done-circle-outline' },
     ];
 
-    const isFlaskTea = order?.items?.some(item => 
+    const isFlaskTea = order?.isBulk || order?.items?.some(item => 
         (item.name || '').toLowerCase().includes('flask tea')
     );
     const timeoutLimit = isFlaskTea ? 300 : 60;
@@ -162,16 +162,25 @@ const TrackOrderScreen = ({ route, navigation }) => {
 
             {/* Main Content */}
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.contentContainer}>
-                {/* ETA Badge - Only show when confirmed or delivered */}
-                {order?.status === 'confirmed' ? (
-                    <View style={styles.etaHeader}>
-                        <Icon name="time-outline" size={24} color={COLORS.primary} />
-                        <Text style={styles.etaTextHeader}>Estimated Delivery: 8-10 mins</Text>
-                    </View>
-                ) : order?.status === 'delivered' ? (
+                {order?.status === 'delivered' ? (
                     <View style={[styles.etaHeader, { backgroundColor: COLORS.success + '15' }]}>
                         <Icon name="checkmark-done-circle" size={24} color={COLORS.success} />
                         <Text style={[styles.etaTextHeader, { color: COLORS.success }]}>Order Delivered!</Text>
+                    </View>
+                ) : order?.isBulk && order?.deliveryDate ? (
+                    <View style={styles.etaHeader}>
+                        <Icon name="calendar-outline" size={24} color={COLORS.primary} />
+                        <View style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                            <Text style={styles.etaTextHeader}>Scheduled Delivery</Text>
+                            <Text style={{ fontSize: SIZES.small + 1, color: COLORS.textSecondary, marginTop: 2, fontWeight: '600' }}>
+                                Expected: {order.deliveryDate} at {order.deliveryTime}
+                            </Text>
+                        </View>
+                    </View>
+                ) : order?.status === 'confirmed' ? (
+                    <View style={styles.etaHeader}>
+                        <Icon name="time-outline" size={24} color={COLORS.primary} />
+                        <Text style={styles.etaTextHeader}>Estimated Delivery: 8-10 mins</Text>
                     </View>
                 ) : (
                     <View style={styles.etaHeader}>
@@ -204,7 +213,7 @@ const TrackOrderScreen = ({ route, navigation }) => {
                         </View>
                         <Text style={styles.countdownHint}>
                             {isFlaskTea 
-                                ? 'Corporate Manager is reviewing your premium Flask Tea order (Max 5 mins)'
+                                ? 'Corporate Manager is reviewing your premium Flask/Bulk Tea order (Max 5 mins)'
                                 : 'Rider will accept and confirm your delivery in under a minute'}
                         </Text>
                     </View>
