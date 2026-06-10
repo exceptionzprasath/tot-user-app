@@ -35,8 +35,25 @@ const isVersionOlder = (current, required) => {
 };
 
 const AppContent = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const [isSplashDone, setIsSplashDone] = React.useState(false);
+
+  // Subscribe to customer-specific push notification topic
+  React.useEffect(() => {
+    const subscribeToPersonalTopic = async () => {
+      try {
+        if (isAuthenticated && user?.phone) {
+          const sanitizedPhone = user.phone.replace(/[^a-zA-Z0-9-_.~%]/g, '');
+          const customerTopic = `customer_${sanitizedPhone}`;
+          await messaging().subscribeToTopic(customerTopic);
+          console.log(`[FCM] Subscribed customer to personalized topic: ${customerTopic}`);
+        }
+      } catch (err) {
+        console.log('[FCM] Personal topic subscription error:', err.message);
+      }
+    };
+    subscribeToPersonalTopic();
+  }, [isAuthenticated, user?.phone]);
   const [isUpdateRequired, setIsUpdateRequired] = React.useState(false);
   const [requiredVersion, setRequiredVersion] = React.useState('0.0.1');
   const [playStoreUrl, setPlayStoreUrl] = React.useState('https://play.google.com/store/apps/details?id=com.thambiorutea');

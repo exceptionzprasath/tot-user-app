@@ -45,7 +45,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 const CartScreen = ({ navigation }) => {
     const { cart, addToCart, removeFromCart, clearCart, getCartTotal, getCartCount } = useCart();
     const { savedLocations } = useLocation();
-    const { user, isFreeTeaEligible, logout } = useAuth();
+    const { user, isFreeTeaEligible, logout, refreshFreeTeaEligibility } = useAuth();
     const insets = useSafeAreaInsets();
     const extraBottom = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 15 : 0);
     const cartItems = Object.values(cart);
@@ -104,6 +104,7 @@ const CartScreen = ({ navigation }) => {
                     setIsOrdering(false);
                     setPendingOrderId(null);
                     setPaymentStatus('none');
+                    refreshFreeTeaEligibility();
                     navigation.navigate('TrackOrder', { order: updatedOrder });
                 }
             },
@@ -137,6 +138,7 @@ const CartScreen = ({ navigation }) => {
                                     setIsOrdering(false);
                                     setPendingOrderId(null);
                                     setPaymentStatus('none');
+                                    refreshFreeTeaEligibility();
                                     navigation.navigate('TrackOrder', { order: response.data.data });
                                 }
                             } catch (err) {
@@ -208,6 +210,46 @@ const CartScreen = ({ navigation }) => {
     const handlePlaceOrder = async () => {
         if (cartItems.length === 0) return;
 
+        // Check for active pending orders (within 5 minutes)
+        if (user && user.phone) {
+            setIsOrdering(true);
+            setOrderStep('fetching'); // Show loading indicator
+            try {
+                const activeRes = await api.get(`/orders/customer/${user.phone}`);
+                if (activeRes.data.success && activeRes.data.data && activeRes.data.data.length > 0) {
+                    const latestOrder = activeRes.data.data[0];
+                    const elapsedSeconds = Math.floor((Date.now() - new Date(latestOrder.createdAt).getTime()) / 1000);
+                    const isConfirmedActive = latestOrder.status === 'confirmed';
+                    const isPlacedActive = latestOrder.status === 'placed' && elapsedSeconds < 300;
+
+                    if (isConfirmedActive || isPlacedActive) {
+                        setIsOrdering(false);
+                        Alert.alert(
+                            'Active Order Pending',
+                            isConfirmedActive
+                                ? 'You already have an order accepted and being delivered by a rider. To prevent duplicates, you cannot place another order until the current one is delivered.'
+                                : 'You already have an active order waiting for rider confirmation. To prevent duplicates, you cannot place another order until the current one is accepted or expires.',
+                            [
+                                {
+                                    text: 'Track Pending Order',
+                                    onPress: () => {
+                                        navigation.navigate('TrackOrder', { order: latestOrder });
+                                    }
+                                },
+                                { text: 'Back', style: 'cancel' }
+                            ]
+                        );
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.error('Error checking active orders:', e);
+            } finally {
+                setIsOrdering(false);
+            }
+        }
+
+        /* Comment out number verified check temporarily
         if (!user || !user.isVerified) {
             Alert.alert(
                 'Verification Required',
@@ -225,6 +267,7 @@ const CartScreen = ({ navigation }) => {
             );
             return;
         }
+        */
 
         setIsOrdering(true);
         setOrderStep('fetching');
@@ -306,6 +349,7 @@ const CartScreen = ({ navigation }) => {
                     clearCart();
                     setIsOrdering(false);
                     setPaymentStatus('none');
+                    refreshFreeTeaEligibility();
                     navigation.navigate('TrackOrder', { order: response.data.order || response.data.data });
                 }
             } else {
@@ -315,7 +359,8 @@ const CartScreen = ({ navigation }) => {
         } catch (error) {
             console.error('Finalize Order Error:', error);
             setPaymentStatus('none');
-            Alert.alert('Error', 'Connection failed. Please try again.');
+            const errMsg = error.response?.data?.message || 'Connection failed. Please try again.';
+            Alert.alert('Order Failed', errMsg);
         } finally {
             setIsFetchingInfo(false);
         }

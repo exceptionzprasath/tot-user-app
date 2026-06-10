@@ -46,12 +46,28 @@ const RegisterScreen = ({ navigation, route }) => {
                         text: 'Continue', 
                         onPress: async () => {
                             try {
-                                await sendOTP(phoneNumber);
+                                let appSignature = '';
+                                if (Platform.OS === 'android') {
+                                    try {
+                                        const { getAppSignature: getHash } = require('@pushpendersingh/react-native-otp-verify');
+                                        const signatures = await getHash();
+                                        if (Array.isArray(signatures) && signatures.length > 0) {
+                                            appSignature = signatures[0];
+                                        } else if (typeof signatures === 'string') {
+                                            appSignature = signatures;
+                                        }
+                                        console.log('📱 App Signature retrieved (Register):', appSignature);
+                                    } catch (e) {
+                                        console.log('Error getting app signature in RegisterScreen:', e);
+                                    }
+                                }
+
+                                await sendOTP(phoneNumber, appSignature);
                                 Alert.alert('OTP Sent', 'An OTP has been sent to your mobile number.');
                                 navigation.replace('OTP', { phoneNumber });
                             } catch (err) {
                                 console.error('Send OTP Error after Register:', err);
-                                Alert.alert('Error', 'Failed to send OTP. Please try logging in.');
+                                Alert.alert('Error', err.message || 'Failed to send OTP. Please try logging in.');
                             }
                         } 
                     }
@@ -59,7 +75,7 @@ const RegisterScreen = ({ navigation, route }) => {
             }
         } catch (error) {
             console.error('Registration error:', error);
-            Alert.alert('Error', 'Registration failed. Please try again.');
+            Alert.alert('Error', error.message || 'Registration failed. Please try again.');
         } finally {
             setLoading(false);
         }

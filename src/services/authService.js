@@ -10,20 +10,32 @@ export const checkPhone = async (phone) => {
         return response.data;
     } catch (error) {
         console.error('Check Phone API Error:', error);
-        throw error;
+        let message = 'Failed to check phone number. Please try again.';
+        if (error.response) {
+            message = error.response.data?.message || message;
+        } else if (error.request) {
+            message = 'Network Error: Cannot connect to the server. Please check your internet connection.';
+        }
+        throw new Error(message);
     }
 };
 
 /**
  * Send OTP via AWS SNS (Backend)
  */
-export const sendOTP = async (phone) => {
+export const sendOTP = async (phone, appSignature) => {
     try {
-        const response = await api.post('/auth/send-otp', { phone });
+        const response = await api.post('/auth/send-otp', { phone, appSignature });
         return response.data;
     } catch (error) {
         console.error('Send OTP API Error:', error);
-        throw error;
+        let message = 'Failed to send verification code. Please try again.';
+        if (error.response) {
+            message = error.response.data?.message || message;
+        } else if (error.request) {
+            message = 'Network Error: Cannot connect to the server. Please check your internet connection.';
+        }
+        throw new Error(message);
     }
 };
 
@@ -44,8 +56,14 @@ export const verifyOTP = async (otpCode, phone) => {
         return response.data;
     } catch (error) {
         console.error('Verify OTP API Error:', error);
-        // Extract error message from response if available
-        const message = error.response?.data?.message || 'The OTP you entered is incorrect. Please try again.';
+        let message = 'The OTP you entered is incorrect. Please try again.';
+        if (error.response) {
+            message = error.response.data?.message || message;
+        } else if (error.request) {
+            message = 'Network Error: Cannot connect to the server. Please check your internet connection or try again later.';
+        } else {
+            message = error.message || message;
+        }
         throw new Error(message);
     }
 };
@@ -63,7 +81,13 @@ export const registerUser = async (formData) => {
         return response.data;
     } catch (error) {
         console.error('Register API Error:', error);
-        throw error;
+        let message = 'Registration failed. Please try again.';
+        if (error.response) {
+            message = error.response.data?.message || message;
+        } else if (error.request) {
+            message = 'Network Error: Cannot connect to the server. Please check your internet connection.';
+        }
+        throw new Error(message);
     }
 };
 

@@ -25,23 +25,20 @@ const { width, height } = Dimensions.get('window');
 const OTPScreen = ({ route, navigation }) => {
     const { login } = useAuth();
     const { phoneNumber } = route.params;
-    const [otp, setOtp] = useState(['', '', '', '', '', '']);
+    const [otp, setOtp] = useState('');
     const [loading, setLoading] = useState(false);
     const [timer, setTimer] = useState(30);
     const [canResend, setCanResend] = useState(false);
+    const [isFocused, setIsFocused] = useState(false);
 
-    const inputRefs = [
-        useRef(null),
-        useRef(null),
-        useRef(null),
-        useRef(null),
-        useRef(null),
-        useRef(null),
-    ];
+    const hiddenInputRef = useRef(null);
 
     useEffect(() => {
-        inputRefs[0].current?.focus();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // Auto focus hidden input on mount
+        const focusTimer = setTimeout(() => {
+            hiddenInputRef.current?.focus();
+        }, 500);
+        return () => clearTimeout(focusTimer);
     }, []);
 
     useEffect(() => {
@@ -55,32 +52,58 @@ const OTPScreen = ({ route, navigation }) => {
         }
     }, [timer, canResend]);
 
-    const handleOtpChange = (value, index) => {
-        if (isNaN(value)) return;
+    useEffect(() => {
+        let isSubscribed = true;
+        let removeListener = null;
 
-        const newOtp = [...otp];
-        newOtp[index] = value;
-        setOtp(newOtp);
-
-        if (value && index < 5) {
-            inputRefs[index + 1].current?.focus();
-        }
-
-        if (index === 5 && value) {
-            const otpString = newOtp.join('');
-            if (otpString.length === 6) {
-                handleVerifyOTP(otpString);
+        const setupRetriever = async () => {
+            if (Platform.OS !== 'android') return;
+            try {
+                const { startSmsRetriever, addSmsListener, extractOtp } = require('@pushpendersingh/react-native-otp-verify');
+                await startSmsRetriever();
+                console.log('💬 SMS Retriever started');
+                removeListener = addSmsListener((message) => {
+                    if (!isSubscribed) return;
+                    if (message && message.status === 'success' && message.message) {
+                        console.log('💬 SMS message received:', message.message);
+                        const extractedOtp = extractOtp(message.message);
+                        if (extractedOtp && extractedOtp.length === 6) {
+                            console.log('✨ Auto Captured OTP:', extractedOtp);
+                            setOtp(extractedOtp);
+                            handleVerifyOTP(extractedOtp);
+                        }
+                    }
+                });
+            } catch (error) {
+                console.log('Error setup SMS retriever:', error);
             }
+        };
+
+        setupRetriever();
+
+        return () => {
+            isSubscribed = false;
+            if (removeListener) {
+                if (typeof removeListener.remove === 'function') {
+                    removeListener.remove();
+                } else if (typeof removeListener === 'function') {
+                    removeListener();
+                }
+            }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const handleOtpChange = (value) => {
+        const cleanValue = value.replace(/[^0-9]/g, '');
+        setOtp(cleanValue);
+        
+        if (cleanValue.length === 6) {
+            handleVerifyOTP(cleanValue);
         }
     };
 
-    const handleKeyPress = (e, index) => {
-        if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-            inputRefs[index - 1].current?.focus();
-        }
-    };
-
-    const handleVerifyOTP = async (otpString = otp.join('')) => {
+    const handleVerifyOTP = async (otpString = otp) => {
         if (otpString.length !== 6) {
             Alert.alert('Error', 'Please enter the complete 6-digit OTP');
             return;
@@ -89,23 +112,20 @@ const OTPScreen = ({ route, navigation }) => {
         setLoading(true);
 
         try {
-
-
-            // authService verifyOTP handles the backend call automatically
             const response = await verifyOTP(otpString, phoneNumber);
 
             if (response.success) {
                 await login(response.user || { phone: phoneNumber });
             } else {
                 Alert.alert('Error', response.message || 'Verification failed');
-                setOtp(['', '', '', '', '', '']);
-                inputRefs[0].current?.focus();
+                setOtp('');
+                hiddenInputRef.current?.focus();
             }
         } catch (err) {
             console.error('Verify OTP error:', err);
             Alert.alert('Invalid OTP', err.message || 'The OTP you entered is incorrect. Please try again.');
-            setOtp(['', '', '', '', '', '']);
-            inputRefs[0].current?.focus();
+            setOtp('');
+            hiddenInputRef.current?.focus();
         } finally {
             setLoading(false);
         }
@@ -114,11 +134,26 @@ const OTPScreen = ({ route, navigation }) => {
     const handleResendOTP = async () => {
         setLoading(true);
         try {
-            await sendOTP(phoneNumber);
-            setOtp(['', '', '', '', '', '']);
+            let appSignature = '';
+            if (Platform.OS === 'android') {
+                try {
+                    const { getAppSignature: getHash } = require('@pushpendersingh/react-native-otp-verify');
+                    const signatures = await getHash();
+                    if (Array.isArray(signatures) && signatures.length > 0) {
+                        appSignature = signatures[0];
+                    } else if (typeof signatures === 'string') {
+                        appSignature = signatures;
+                    }
+                } catch (e) {
+                    console.log('Error getting app signature for resend:', e);
+                }
+            }
+
+            await sendOTP(phoneNumber, appSignature);
+            setOtp('');
             setTimer(30);
             setCanResend(false);
-            inputRefs[0].current?.focus();
+            hiddenInputRef.current?.focus();
             Alert.alert('OTP Resent', 'A new OTP verification code has been sent to your mobile number.');
         } catch (err) {
             Alert.alert('Error', 'Failed to resend OTP. Please try again.');
@@ -162,34 +197,51 @@ const OTPScreen = ({ route, navigation }) => {
                                 Enter the 6-digit code sent to
                             </Text>
                             <Text style={styles.phoneNumberText}>{phoneNumber}</Text>
-
-
                         </Animatable.View>
 
-
-                        {/* OTP Input */}
+                        {/* OTP Input Container */}
                         <Animatable.View
                             animation="fadeInUp"
                             duration={800}
                             delay={200}
-                            style={styles.otpContainer}>
-                            {otp.map((digit, index) => (
+                            style={styles.otpWrapper}>
+                            <View style={styles.otpContainer}>
+                                {Array(6).fill(0).map((_, index) => {
+                                    const digit = otp[index] || '';
+                                    const isCurrentFocused = isFocused && (
+                                        otp.length === index || (otp.length === 6 && index === 5)
+                                    );
+                                    return (
+                                        <View
+                                            key={index}
+                                            style={[
+                                                styles.otpInput,
+                                                digit ? styles.otpInputFilled : null,
+                                                isCurrentFocused ? styles.otpInputFocused : null,
+                                            ]}
+                                            pointerEvents="none"
+                                        >
+                                            <Text style={styles.otpInputText}>{digit}</Text>
+                                        </View>
+                                    );
+                                })}
+
                                 <TextInput
-                                    key={index}
-                                    ref={inputRefs[index]}
-                                    style={[
-                                        styles.otpInput,
-                                        digit && styles.otpInputFilled,
-                                    ]}
-                                    value={digit}
-                                    onChangeText={(value) => handleOtpChange(value, index)}
-                                    onKeyPress={(e) => handleKeyPress(e, index)}
+                                    ref={hiddenInputRef}
+                                    style={styles.hiddenInput}
+                                    value={otp}
+                                    onChangeText={handleOtpChange}
                                     keyboardType="number-pad"
-                                    maxLength={1}
-                                    placeholderTextColor="rgba(255, 255, 255, 0.3)"
+                                    maxLength={6}
+                                    textContentType="oneTimeCode" // iOS AutoFill
+                                    autoComplete="sms-otp" // Android AutoFill
+                                    importantForAutofill="yes"
+                                    caretHidden
+                                    onFocus={() => setIsFocused(true)}
+                                    onBlur={() => setIsFocused(false)}
                                     selectTextOnFocus
                                 />
-                            ))}
+                            </View>
                         </Animatable.View>
 
                         {/* Verify Button */}
@@ -308,11 +360,18 @@ const styles = StyleSheet.create({
         color: '#E2F400',
         marginTop: 5,
     },
+    otpWrapper: {
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 40,
+    },
     otpContainer: {
         flexDirection: 'row',
         justifyContent: 'center',
-        marginBottom: 40,
         gap: 8,
+        position: 'relative',
+        width: '100%',
     },
     otpInput: {
         width: 48,
@@ -320,15 +379,39 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.3)',
         borderRadius: 12,
-        textAlign: 'center',
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: COLORS.white,
+        justifyContent: 'center',
+        alignItems: 'center',
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
     },
     otpInputFilled: {
         borderColor: '#E2F400',
         backgroundColor: 'rgba(226, 244, 0, 0.1)',
+    },
+    otpInputFocused: {
+        borderColor: '#E2F400',
+        borderWidth: 2,
+        backgroundColor: 'rgba(226, 244, 0, 0.15)',
+        shadowColor: '#E2F400',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.4,
+        shadowRadius: 5,
+        elevation: 2,
+    },
+    otpInputText: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: COLORS.white,
+    },
+    hiddenInput: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        opacity: 0.01,
+        backgroundColor: 'transparent',
+        color: 'transparent',
+        zIndex: 2,
     },
     buttonSection: {
         width: '100%',

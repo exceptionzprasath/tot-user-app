@@ -181,7 +181,8 @@ const ProfileScreen = ({ navigation }) => {
                                 ) : (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                         <Text style={styles.profileName}>{displayName}</Text>
-                                        {userData.isVerified ? (
+                                        {/* Comment out verification badge temporarily
+                                        userData.isVerified ? (
                                             <View style={styles.verifiedBadge}>
                                                 <Icon name="checkmark-circle" size={12} color="#2E7D32" />
                                                 <Text style={styles.verifiedText}>Verified</Text>
@@ -191,7 +192,8 @@ const ProfileScreen = ({ navigation }) => {
                                                 <Icon name="close-circle" size={12} color="#C62828" />
                                                 <Text style={styles.unverifiedText}>Not Verified</Text>
                                             </View>
-                                        )}
+                                        )
+                                        */}
                                     </View>
                                 )}
                                 <View style={styles.phoneRow}>
@@ -325,7 +327,7 @@ const ProfileScreen = ({ navigation }) => {
                     </TouchableOpacity>
 
                     {/* Version */}
-                    <Text style={styles.versionText}>Version 1.9</Text>
+                    <Text style={styles.versionText}>Version 1.10</Text>
                 </View>
             </ScrollView>
         </View>

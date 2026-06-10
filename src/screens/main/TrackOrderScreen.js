@@ -17,6 +17,7 @@ import * as Animatable from 'react-native-animatable';
 import { COLORS, SIZES, SHADOWS } from '../../utils/colors';
 import { listenToOrder } from '../../config/firestore';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,6 +25,7 @@ const TrackOrderScreen = ({ route, navigation }) => {
     const { order: initialOrder } = route.params;
     const [order, setOrder] = useState(initialOrder);
     const [timeLeft, setTimeLeft] = useState(60);
+    const { refreshFreeTeaEligibility } = useAuth();
 
     const getStatusStep = () => {
         switch (order?.status) {
@@ -47,7 +49,7 @@ const TrackOrderScreen = ({ route, navigation }) => {
     const isFlaskTea = order?.isBulk || order?.items?.some(item => 
         (item.name || '').toLowerCase().includes('flask tea')
     );
-    const timeoutLimit = isFlaskTea ? 300 : 60;
+    const timeoutLimit = 300; // 5 minutes for all order types
 
     useEffect(() => {
         if (order?.status !== 'placed') return;
@@ -79,14 +81,20 @@ const TrackOrderScreen = ({ route, navigation }) => {
         const unsubscribe = listenToOrder(
             order.id,
             (updatedOrder) => {
-                console.log('TrackOrder updated via Firestore:', updatedOrder.status);
-                setOrder(updatedOrder);
+                console.log('TrackOrder updated via Firestore:', updatedOrder?.status);
+                if (updatedOrder) {
+                    setOrder(updatedOrder);
+                    // Refresh free tea eligibility when status changes to completed or cancelled/expired
+                    if (['delivered', 'expired', 'unassigned'].includes(updatedOrder.status)) {
+                        refreshFreeTeaEligibility();
+                    }
+                }
             },
             (error) => console.error('Firestore order listen error:', error)
         );
 
         return () => unsubscribe();
-    }, [order.id]);
+    }, [order.id, refreshFreeTeaEligibility]);
 
     const handleCall = (phone) => {
         if (!phone) return;
@@ -190,32 +198,74 @@ const TrackOrderScreen = ({ route, navigation }) => {
                 )}
 
                 {order?.status === 'placed' && (
-                    <View style={styles.countdownContainer}>
-                        <View style={styles.countdownHeader}>
-                            <Text style={styles.countdownLabel}>
+                    <View style={styles.premiumWaitCard}>
+                        {/* Matchmaking Header */}
+                        <View style={styles.waitHeaderRow}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Animatable.View
+                                    animation="pulse"
+                                    iterationCount="infinite"
+                                    style={styles.pulsingLiveDot}
+                                />
+                                <Text style={styles.waitHeaderTitle}>
+                                    {isFlaskTea ? 'Awaiting Approval' : 'Rider Matchmaking Live'}
+                                </Text>
+                            </View>
+                            <Animatable.View
+                                animation="rotate"
+                                iterationCount="infinite"
+                                duration={3000}
+                                easing="linear"
+                            >
+                                <Icon name="sync-outline" size={18} color={COLORS.primary} />
+                            </Animatable.View>
+                        </View>
+
+                        {/* Large Timer Section */}
+                        <View style={styles.timerWrapper}>
+                            <Text style={styles.timerSubtitle}>Connecting to nearby riders...</Text>
+                            <Text style={styles.timerText}>
                                 {timeLeft > 0 
-                                    ? isFlaskTea 
-                                        ? `Awaiting Corporate approval... ${Math.floor(timeLeft / 60)}m ${timeLeft % 60}s`
-                                        : `Connecting to nearby riders... ${timeLeft}s` 
-                                    : isFlaskTea
-                                        ? 'Refunding order...'
-                                        : 'Assigning rider now...'}
+                                    ? `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`
+                                    : '00:00'}
                             </Text>
-                            <Icon name="radio-outline" size={18} color={COLORS.secondary} />
+                            <View style={styles.progressBarBg}>
+                                <View 
+                                    style={[
+                                        styles.progressBarFill, 
+                                        { width: `${(timeLeft / timeoutLimit) * 100}%` }
+                                    ]} 
+                                />
+                            </View>
                         </View>
-                        <View style={styles.progressBarBg}>
-                            <View 
-                                style={[
-                                    styles.progressBarFill, 
-                                    { width: `${(timeLeft / timeoutLimit) * 100}%` }
-                                ]} 
-                            />
+
+                        {/* Description / Security Notices */}
+                        <View style={styles.waitDetailsContainer}>
+                            <Text style={styles.waitInfoText}>
+                                {isFlaskTea
+                                    ? 'Our corporate team is reviewing your premium Flask/Bulk order details.'
+                                    : 'Your order has been broadcasted to nearby riders. Please wait.'}
+                            </Text>
+                            <View style={styles.divider} />
+                            
+                            {/* Security Notice */}
+                            <View style={styles.noticeItem}>
+                                <Icon name="shield-checkmark-outline" size={16} color="#2E7D32" style={{ marginRight: 6 }} />
+                                <Text style={styles.noticeText}>
+                                    {order?.paymentMode === 'online'
+                                        ? 'Payment Secured. If no rider accepts within 5 minutes, your order will auto-cancel and refund instantly.'
+                                        : 'COD Order. Auto-cancels after 5 minutes of no rider response with zero charge.'}
+                                </Text>
+                            </View>
+
+                            {/* Restriction Alert */}
+                            <View style={[styles.noticeItem, { marginTop: 8 }]}>
+                                <Icon name="alert-circle-outline" size={16} color="#C62828" style={{ marginRight: 6 }} />
+                                <Text style={styles.noticeTextRed}>
+                                    To prevent duplicate assignments, placing new orders is restricted during this 5-minute matchmaking window.
+                                </Text>
+                            </View>
                         </View>
-                        <Text style={styles.countdownHint}>
-                            {isFlaskTea 
-                                ? 'Corporate Manager is reviewing your premium Flask/Bulk Tea order (Max 5 mins)'
-                                : 'Rider will accept and confirm your delivery in under a minute'}
-                        </Text>
                     </View>
                 )}
 
@@ -647,42 +697,103 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         lineHeight: 18,
     },
-    countdownContainer: {
+    premiumWaitCard: {
         backgroundColor: COLORS.white,
         marginHorizontal: SIZES.padding,
         padding: SIZES.padding,
         borderRadius: SIZES.radiusLarge,
         marginBottom: SIZES.padding,
-        ...SHADOWS.small,
+        borderWidth: 1.5,
+        borderColor: COLORS.primary + '15',
+        ...SHADOWS.medium,
     },
-    countdownHeader: {
+    waitHeaderRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 10,
+        marginBottom: 16,
     },
-    countdownLabel: {
-        fontSize: SIZES.regular,
-        fontWeight: '700',
+    pulsingLiveDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#4CAF50',
+        marginRight: 8,
+    },
+    waitHeaderTitle: {
+        fontSize: SIZES.regular - 1,
+        fontWeight: '800',
         color: COLORS.textPrimary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    timerWrapper: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 10,
+        backgroundColor: '#FFFDE7',
+        borderRadius: 12,
+        marginBottom: 16,
+        paddingHorizontal: SIZES.padding,
+    },
+    timerSubtitle: {
+        fontSize: SIZES.small,
+        color: COLORS.mediumGray,
+        marginBottom: 4,
+        fontWeight: '500',
+    },
+    timerText: {
+        fontSize: SIZES.xxlarge + 8,
+        fontWeight: '900',
+        color: COLORS.primary,
+        letterSpacing: 1.5,
+        marginVertical: 4,
     },
     progressBarBg: {
-        height: 8,
+        height: 6,
+        width: '100%',
         backgroundColor: COLORS.lightGray,
-        borderRadius: 4,
+        borderRadius: 3,
         overflow: 'hidden',
-        marginVertical: 4,
+        marginTop: 8,
     },
     progressBarFill: {
         height: '100%',
-        backgroundColor: COLORS.secondary,
-        borderRadius: 4,
+        backgroundColor: COLORS.primary,
+        borderRadius: 3,
     },
-    countdownHint: {
-        fontSize: SIZES.xs,
-        color: COLORS.mediumGray,
-        marginTop: 6,
-        lineHeight: 16,
+    waitDetailsContainer: {
+        paddingTop: 4,
+    },
+    waitInfoText: {
+        fontSize: SIZES.small + 1,
+        color: COLORS.textSecondary,
+        lineHeight: 18,
+        textAlign: 'center',
+        marginBottom: 12,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: COLORS.lightGray,
+        marginVertical: 12,
+    },
+    noticeItem: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    noticeText: {
+        flex: 1,
+        fontSize: SIZES.xs + 1,
+        color: '#2E7D32',
+        lineHeight: 15,
+        fontWeight: '600',
+    },
+    noticeTextRed: {
+        flex: 1,
+        fontSize: SIZES.xs + 1,
+        color: '#C62828',
+        lineHeight: 15,
+        fontWeight: '700',
     },
 });
 

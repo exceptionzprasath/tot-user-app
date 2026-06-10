@@ -262,14 +262,15 @@ const MenuScreen = ({ navigation }) => {
         const [bulkCoords, setBulkCoords] = useState(null);
 
         const flatListRef = useRef(null);
-        const countPresets = useMemo(() => [10, 20, 30, 50, 100, 150, 200, 250, 300, 400, 500, 750, 1000], []);
-        const countOptions = useMemo(() => Array.from({ length: 1001 }, (_, i) => i), []);
+        const countPresets = useMemo(() => [50, 100, 150, 200, 250, 300, 400, 500, 750, 1000], []);
+        const countOptions = useMemo(() => Array.from({ length: 951 }, (_, i) => i + 50), []);
 
         const selectCount = (val) => {
             setBulkCount(val.toString());
             try {
+                const targetIndex = val - 50;
                 flatListRef.current?.scrollToIndex({
-                    index: val,
+                    index: targetIndex >= 0 ? targetIndex : 0,
                     animated: true,
                     viewPosition: 0.5
                 });
@@ -432,7 +433,7 @@ const MenuScreen = ({ navigation }) => {
     };
 
     const handleOpenBulkModal = () => {
-        setBulkCount('0');
+        setBulkCount('50');
         setBulkLocationAddress(currentLocation && currentLocation !== 'Fetching location...' && currentLocation !== 'Location unavailable' && currentLocation !== 'Permission Denied' ? currentLocation : '');
         setBulkCoords(locationCoords);
         
@@ -499,8 +500,8 @@ const MenuScreen = ({ navigation }) => {
 
     const handlePlaceBulkOrder = async () => {
         const count = parseInt(bulkCount);
-        if (!count || count < 10) {
-            Alert.alert('Invalid Count', 'Minimum bulk order is 10 teas.');
+        if (!count || count < 50) {
+            Alert.alert('Invalid Count', 'Minimum bulk order is 50 teas.');
             return;
         }
         if (!selectedBulkDate) {
@@ -726,7 +727,7 @@ const MenuScreen = ({ navigation }) => {
                     <Text style={styles.bulkSectionTitle}>Corporate & Event Bulk Orders</Text>
                 </View>
                 <Text style={styles.bulkSectionDescription}>
-                    Hosting an event or meeting? Order tea in bulk (min 10 teas) and select your expected date and time for hot, fresh delivery.
+                    Hosting an event or meeting? Order tea in bulk (min 50 teas) and select your expected date and time for hot, fresh delivery.
                 </Text>
                 <TouchableOpacity
                     style={styles.bulkSectionButton}
@@ -827,7 +828,7 @@ const MenuScreen = ({ navigation }) => {
                         <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
                             {/* Description */}
                             <Text style={styles.modalDescription}>
-                                Order Tea in bulk for your corporate meetings, celebrations or gatherings. Minimum order is 10 teas.
+                                Order Tea in bulk for your corporate meetings, celebrations or gatherings. Minimum order is 50 teas.
                             </Text>
 
                             {/* Form Inputs */}
@@ -992,10 +993,10 @@ const MenuScreen = ({ navigation }) => {
                         <TouchableOpacity
                             style={[
                                 styles.orderNowButton,
-                                (!bulkCount || parseInt(bulkCount) < 10 || !bulkLocationAddress.trim() || isPlacingBulkOrder) && styles.orderNowButtonDisabled
+                                (!bulkCount || parseInt(bulkCount) < 50 || !bulkLocationAddress.trim() || isPlacingBulkOrder) && styles.orderNowButtonDisabled
                             ]}
                             onPress={handlePlaceBulkOrder}
-                            disabled={!bulkCount || parseInt(bulkCount) < 10 || !bulkLocationAddress.trim() || isPlacingBulkOrder}
+                            disabled={!bulkCount || parseInt(bulkCount) < 50 || !bulkLocationAddress.trim() || isPlacingBulkOrder}
                             activeOpacity={0.8}
                         >
                             {isPlacingBulkOrder ? (

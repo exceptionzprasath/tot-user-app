@@ -68,7 +68,24 @@ const LoginScreen = ({ navigation }) => {
 
             if (checkResult.success) {
                 if (checkResult.exists) {
-                    const response = await sendOTP(fullPhone);
+                    /* Comment out OTP screen flow temporarily
+                    let appSignature = '';
+                    if (Platform.OS === 'android') {
+                        try {
+                            const { getAppSignature: getHash } = require('@pushpendersingh/react-native-otp-verify');
+                            const signatures = await getHash();
+                            if (Array.isArray(signatures) && signatures.length > 0) {
+                                appSignature = signatures[0];
+                            } else if (typeof signatures === 'string') {
+                                appSignature = signatures;
+                            }
+                            console.log('📱 App Signature retrieved:', appSignature);
+                        } catch (e) {
+                            console.log('Error getting app signature in LoginScreen:', e);
+                        }
+                    }
+
+                    const response = await sendOTP(fullPhone, appSignature);
                     if (response.success) {
                         Alert.alert(
                             'OTP Sent',
@@ -78,6 +95,10 @@ const LoginScreen = ({ navigation }) => {
                     } else {
                         setError(response.message || 'Failed to send OTP. Please try again.');
                     }
+                    */
+
+                    // Instantly login with existing profile and force isVerified to true
+                    await login({ ...(checkResult.user || {}), phone: fullPhone, isVerified: true });
                 } else {
                     // Step 2b: New user — go to Register screen
                     navigation.navigate('Register', { phoneNumber: fullPhone });
@@ -87,7 +108,7 @@ const LoginScreen = ({ navigation }) => {
             }
         } catch (err) {
             console.error('Login error:', err);
-            setError('Login failed. Please try again.');
+            setError(err.message || 'Login failed. Please try again.');
         } finally {
             setLoading(false);
         }
