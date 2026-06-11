@@ -17,8 +17,10 @@ import * as Animatable from 'react-native-animatable';
 import { COLORS, SHADOWS } from '../../utils/colors';
 import Button from '../../components/Button';
 import { registerUser, sendOTP } from '../../services/authService';
+import { useAuth } from '../../context/AuthContext';
 
 const RegisterScreen = ({ navigation, route }) => {
+    const { login } = useAuth();
     const { phoneNumber } = route.params;
     const [name, setName] = useState('');
     const [loading, setLoading] = useState(false);
@@ -41,33 +43,22 @@ const RegisterScreen = ({ navigation, route }) => {
             const result = await registerUser(formData);
 
             if (result.success) {
-                Alert.alert('Success', 'Welcome to Thambioru Tea! Verifying your mobile number.', [
+                Alert.alert('Success', 'Welcome to Thambioru Tea! Registration successful.', [
                     { 
                         text: 'Continue', 
                         onPress: async () => {
                             try {
-                                let appSignature = '';
-                                if (Platform.OS === 'android') {
-                                    try {
-                                        const { getAppSignature: getHash } = require('@pushpendersingh/react-native-otp-verify');
-                                        const signatures = await getHash();
-                                        if (Array.isArray(signatures) && signatures.length > 0) {
-                                            appSignature = signatures[0];
-                                        } else if (typeof signatures === 'string') {
-                                            appSignature = signatures;
-                                        }
-                                        console.log('📱 App Signature retrieved (Register):', appSignature);
-                                    } catch (e) {
-                                        console.log('Error getting app signature in RegisterScreen:', e);
-                                    }
-                                }
-
-                                await sendOTP(phoneNumber, appSignature);
-                                Alert.alert('OTP Sent', 'An OTP has been sent to your mobile number.');
-                                navigation.replace('OTP', { phoneNumber });
+                                // Directly login the newly registered user and force isVerified to true
+                                await login({
+                                    ...(result.user || {}),
+                                    phone: phoneNumber,
+                                    name: name.trim(),
+                                    role: 'customer',
+                                    isVerified: true
+                                });
                             } catch (err) {
-                                console.error('Send OTP Error after Register:', err);
-                                Alert.alert('Error', err.message || 'Failed to send OTP. Please try logging in.');
+                                console.error('Auto login error after registration:', err);
+                                Alert.alert('Error', 'Failed to log in automatically. Please try logging in.');
                             }
                         } 
                     }
