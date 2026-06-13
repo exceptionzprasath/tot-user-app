@@ -88,7 +88,7 @@ const CartScreen = ({ navigation }) => {
     const [pendingOrderId, setPendingOrderId] = React.useState(null);
     const [paymentStatus, setPaymentStatus] = React.useState('none'); // 'none' | 'initiating' | 'waiting' | 'failed'
     const [checkoutUrl, setCheckoutUrl] = React.useState('');
-    const [paymentMethod, setPaymentMethod] = React.useState(null); // null | 'ONLINE' | 'COD'
+    const [paymentMethod, setPaymentMethod] = React.useState('COD'); // null | 'ONLINE' | 'COD'
 
     // Real-time Firestore event listener for payment success
     React.useEffect(() => {
@@ -629,6 +629,7 @@ const CartScreen = ({ navigation }) => {
                                             <View style={styles.paymentMethodSelection}>
                                                 <Text style={styles.paymentMethodTitle}>Select Payment Method:</Text>
                                                 <View style={styles.paymentMethodList}>
+                                                    {/*
                                                     <TouchableOpacity 
                                                         style={[styles.paymentMethodChip, paymentMethod === 'ONLINE' && styles.paymentMethodChipActive]}
                                                         onPress={() => setPaymentMethod('ONLINE')}
@@ -636,6 +637,7 @@ const CartScreen = ({ navigation }) => {
                                                         <Icon name="card-outline" size={16} color={paymentMethod === 'ONLINE' ? COLORS.white : COLORS.primary} />
                                                         <Text style={[styles.paymentMethodChipText, paymentMethod === 'ONLINE' && styles.paymentMethodChipTextActive]}>Pay Online</Text>
                                                     </TouchableOpacity>
+                                                    */}
                                                     <TouchableOpacity 
                                                         style={[styles.paymentMethodChip, paymentMethod === 'COD' && styles.paymentMethodChipActive]}
                                                         onPress={() => setPaymentMethod('COD')}

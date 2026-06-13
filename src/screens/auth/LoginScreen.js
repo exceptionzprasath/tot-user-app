@@ -43,7 +43,7 @@ const LoginScreen = ({ navigation }) => {
         }
 
         const fullPhone = `+91${phoneNumber}`;
-        
+
         // Special Bypass for Hari
         if (phoneNumber === '9361016097') {
             setLoading(true);
@@ -190,7 +190,7 @@ const LoginScreen = ({ navigation }) => {
                             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
                             <Button
-                                title="Get OTP"
+                                title="Login"
                                 onPress={handleSendOTP}
                                 loading={loading}
                                 style={styles.getOtpButton}
