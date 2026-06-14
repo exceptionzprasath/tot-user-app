@@ -255,6 +255,9 @@ const MenuScreen = ({ navigation }) => {
     const { cart, addToCart, removeFromCart, getCartCount, getCartTotal } = useCart();
     const { isFreeTeaEligible, user } = useAuth(); // Added user here
     
+        const [weatherData, setWeatherData] = useState(null);
+        const [weatherLoading, setWeatherLoading] = useState(false);
+
         const [locationCoords, setLocationCoords] = useState(null);
         const [isBulkModalVisible, setIsBulkModalVisible] = useState(false);
         const [bulkCount, setBulkCount] = useState('0');
@@ -381,12 +384,38 @@ const MenuScreen = ({ navigation }) => {
             }
         };
 
+        // Fetch weather data from Google Weather API
+        const fetchWeatherData = async (latitude, longitude) => {
+            setWeatherLoading(true);
+            try {
+                const response = await fetch(
+                    `https://weather.googleapis.com/v1/currentConditions:lookup?key=AIzaSyBO86Y_HqbJDWjCfBljLC72qiazTSk4i1o&location.latitude=${latitude}&location.longitude=${longitude}`
+                );
+                const data = await response.json();
+                if (data && data.temperature) {
+                    setWeatherData({
+                        temperature: Math.round(data.temperature?.degrees || 0),
+                        feelsLike: Math.round(data.feelsLikeTemperature?.degrees || 0),
+                        description: data.weatherCondition?.description?.text || data.weatherCondition?.type?.replace(/_/g, ' ') || 'Clear',
+                        humidity: data.relativeHumidity || 0,
+                        windSpeed: Math.round(data.wind?.speed?.value || 0),
+                        uvIndex: data.uvIndex || 0,
+                    });
+                }
+            } catch (err) {
+                console.log('Weather API error:', err.message);
+            } finally {
+                setWeatherLoading(false);
+            }
+        };
+
         // Try high-accuracy GPS first
         Geolocation.getCurrentPosition(
             (position) => {
                 const { latitude, longitude } = position.coords;
                 setLocationCoords({ latitude, longitude });
                 reverseGeocode(latitude, longitude);
+                fetchWeatherData(latitude, longitude);
             },
             (error) => {
                 console.log('High-accuracy location failed, retrying with low accuracy:', error.code, error.message);
@@ -396,6 +425,7 @@ const MenuScreen = ({ navigation }) => {
                         const { latitude, longitude } = position.coords;
                         setLocationCoords({ latitude, longitude });
                         reverseGeocode(latitude, longitude);
+                        fetchWeatherData(latitude, longitude);
                     },
                     (fallbackError) => {
                         console.log('Low-accuracy location also failed:', fallbackError.code, fallbackError.message);
@@ -567,6 +597,40 @@ const MenuScreen = ({ navigation }) => {
         } finally {
             setIsPlacingBulkOrder(false);
         }
+    };
+
+    const renderWeatherCard = () => {
+        if (!weatherData) return null;
+        return (
+            <Animatable.View animation="fadeIn" delay={200} duration={600} style={styles.weatherCard}>
+                <View style={styles.weatherLeft}>
+                    <LottieView
+                        source={require('../../assets/weather.json')}
+                        autoPlay
+                        loop
+                        style={styles.weatherLottie}
+                    />
+                </View>
+                <View style={styles.weatherCenter}>
+                    <Text style={styles.weatherTemp}>{weatherData.temperature}°C</Text>
+                    <Text style={styles.weatherDesc} numberOfLines={1}>{weatherData.description}</Text>
+                </View>
+                <View style={styles.weatherRight}>
+                    <View style={styles.weatherMiniRow}>
+                        <Icon name="water-outline" size={12} color={COLORS.blue} />
+                        <Text style={styles.weatherMiniText}>{weatherData.humidity}%</Text>
+                    </View>
+                    <View style={styles.weatherMiniRow}>
+                        <Icon name="speedometer-outline" size={12} color={COLORS.mediumGray} />
+                        <Text style={styles.weatherMiniText}>{weatherData.windSpeed} km/h</Text>
+                    </View>
+                    <View style={styles.weatherMiniRow}>
+                        <Icon name="thermometer-outline" size={12} color={COLORS.primary} />
+                        <Text style={styles.weatherMiniText}>Feels {weatherData.feelsLike}°</Text>
+                    </View>
+                </View>
+            </Animatable.View>
+        );
     };
 
     const renderLocationBar = () => (
@@ -751,6 +815,7 @@ const MenuScreen = ({ navigation }) => {
                 <>
                     {renderTopBar()}
                     {renderLocationBar()}
+                    {renderWeatherCard()}
                     <FlatList
                         key={isGridView ? 'grid' : 'list'}
                         data={filteredItems}
@@ -1768,6 +1833,62 @@ const styles = StyleSheet.create({
         color: COLORS.textPrimary,
         fontWeight: 'bold',
         fontSize: SIZES.regular,
+    },
+    // Weather Card Styles
+    weatherCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.white,
+        marginHorizontal: SIZES.padding,
+        marginTop: 8,
+        marginBottom: 4,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: SIZES.radiusLarge,
+        ...SHADOWS.medium,
+    },
+    weatherLeft: {
+        width: 44,
+        height: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    weatherLottie: {
+        width: 44,
+        height: 44,
+    },
+    weatherCenter: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    weatherTemp: {
+        fontSize: 22,
+        fontWeight: '800',
+        color: COLORS.textPrimary,
+        letterSpacing: -0.5,
+    },
+    weatherDesc: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: COLORS.textSecondary,
+        textTransform: 'capitalize',
+        marginTop: 1,
+    },
+    weatherRight: {
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        gap: 3,
+    },
+    weatherMiniRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    weatherMiniText: {
+        fontSize: 10,
+        fontWeight: '600',
+        color: COLORS.mediumGray,
     },
 });
 
