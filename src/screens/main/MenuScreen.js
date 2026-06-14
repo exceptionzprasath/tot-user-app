@@ -13,6 +13,7 @@ import {
     TextInput,
     Image,
     Animated,
+    Easing,
     PermissionsAndroid,
     Modal,
     ScrollView,
@@ -28,7 +29,8 @@ import { getMenuItems } from '../../services/mockMenuService';
 import { useFavorites } from '../../context/FavoritesContext';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
-import api from '../../services/api'; // Added api import here
+import api, { API_BASE_URL } from '../../services/api'; // Added api import here
+import Svg, { G, Path, Text as SvgText, Circle, Defs, LinearGradient, RadialGradient, Stop } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
 const STATUSBAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight : 0;
@@ -253,7 +255,21 @@ const MenuScreen = ({ navigation }) => {
     const [isLocating, setIsLocating] = useState(false);
     const { isFavorite, toggleFavorite } = useFavorites();
     const { cart, addToCart, removeFromCart, getCartCount, getCartTotal } = useCart();
-    const { isFreeTeaEligible, user } = useAuth(); // Added user here
+    const { isFreeTeaEligible, user, refreshFreeTeaEligibility } = useAuth();
+    
+    // Spin & Win State
+    const [isSpinModalVisible, setIsSpinModalVisible] = useState(false);
+    const [spinStatus, setSpinStatus] = useState({
+        canSpin: false,
+        cooldownRemaining: 0,
+        hasPendingFreeTea: false,
+        isSunday: false,
+        lastSpinTime: null
+    });
+    const [isSpinning, setIsSpinning] = useState(false);
+    const [cooldownText, setCooldownText] = useState('');
+    const spinValue = useRef(new Animated.Value(0)).current;
+    const cooldownIntervalRef = useRef(null);
     
         const [weatherData, setWeatherData] = useState(null);
         const [weatherLoading, setWeatherLoading] = useState(false);
@@ -338,6 +354,380 @@ const MenuScreen = ({ navigation }) => {
     useEffect(() => {
         loadMenuItems();
     }, [selectedCategory]);
+
+    // Spin & Win Cooldown Formatter
+    const formatCooldown = (ms) => {
+        if (ms <= 0) return '00:00:00';
+        const totalSecs = Math.floor(ms / 1000);
+        const secs = totalSecs % 60;
+        const totalMins = Math.floor(totalSecs / 60);
+        const mins = totalMins % 60;
+        const hrs = Math.floor(totalMins / 60);
+        return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    };
+
+    // Spin & Win Effects
+    useEffect(() => {
+        if (user && user.phone) {
+            fetchSpinStatus();
+        }
+        return () => {
+            if (cooldownIntervalRef.current) {
+                clearInterval(cooldownIntervalRef.current);
+            }
+        };
+    }, [user]);
+
+    const startCooldownTimer = (remainingMs) => {
+        if (cooldownIntervalRef.current) {
+            clearInterval(cooldownIntervalRef.current);
+        }
+        let currentRemaining = remainingMs;
+        setCooldownText(formatCooldown(currentRemaining));
+        
+        cooldownIntervalRef.current = setInterval(() => {
+            currentRemaining -= 1000;
+            if (currentRemaining <= 0) {
+                clearInterval(cooldownIntervalRef.current);
+                setCooldownText('');
+                fetchSpinStatus();
+            } else {
+                setCooldownText(formatCooldown(currentRemaining));
+            }
+        }, 1000);
+    };
+
+    const fetchSpinStatus = async () => {
+        if (!user || !user.phone) return;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/spin/status/${encodeURIComponent(user.phone)}`);
+            const data = await response.json();
+            if (data && data.success) {
+                setSpinStatus(data);
+                if (data.cooldownRemaining > 0) {
+                    startCooldownTimer(data.cooldownRemaining);
+                } else {
+                    setCooldownText('');
+                }
+            }
+        } catch (error) {
+            console.log('Error fetching spin status:', error.message);
+        }
+    };
+
+    const handleSpin = async () => {
+        if (isSpinning || !user || !user.phone) return;
+        setIsSpinning(true);
+        spinValue.setValue(0);
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/spin/${encodeURIComponent(user.phone)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+            
+            if (data && data.success) {
+                // Calculate target rotation: 5 full turns + stop at correct slot index
+                const finalAngle = 360 * 5 + 240 - (data.slotIndex * 60);
+                
+                Animated.timing(spinValue, {
+                    toValue: finalAngle,
+                    duration: 5000,
+                    easing: Easing.bezier(0.1, 0.8, 0.3, 1),
+                    useNativeDriver: true
+                }).start(() => {
+                    setIsSpinning(false);
+                    if (data.cooldownRemaining) {
+                        setSpinStatus(prev => ({
+                            ...prev,
+                            canSpin: false,
+                            cooldownRemaining: data.cooldownRemaining,
+                            lastSpinTime: data.lastSpinTime
+                        }));
+                        startCooldownTimer(data.cooldownRemaining);
+                    }
+                    refreshFreeTeaEligibility();
+                    
+                    if (data.result === 'free_tea') {
+                        Alert.alert(
+                            "Winner! 🎉",
+                            "Congratulations! You won a FREE TEA! 🍵 It will be automatically applied to your next order.",
+                            [{ text: "Awesome!", onPress: fetchSpinStatus }]
+                        );
+                    } else {
+                        Alert.alert(
+                            "Better Luck Next Time! 👍",
+                            "Come back tomorrow for another spin!",
+                            [{ text: "OK", onPress: fetchSpinStatus }]
+                        );
+                    }
+                });
+            } else {
+                setIsSpinning(false);
+                Alert.alert("Error", data.message || "Failed to execute spin");
+            }
+        } catch (error) {
+            setIsSpinning(false);
+            console.log('Error spinning:', error.message);
+            Alert.alert("Error", "Connection error. Please try again.");
+        }
+    };
+
+    const renderSpinFAB = () => {
+        if (!user) return null;
+        return (
+            <TouchableOpacity
+                style={styles.spinFAB}
+                activeOpacity={0.85}
+                onPress={() => setIsSpinModalVisible(true)}
+            >
+                <LottieView
+                    source={require('../../assets/spin.json')}
+                    autoPlay
+                    loop
+                    style={styles.spinFABLottie}
+                />
+                {!spinStatus.canSpin && !spinStatus.isSunday && (
+                    <View style={styles.cooldownBadge}>
+                        <Icon name="time" size={10} color={COLORS.white} />
+                    </View>
+                )}
+            </TouchableOpacity>
+        );
+    };
+
+    const renderSpinModal = () => {
+        const spinInterpolate = spinValue.interpolate({
+            inputRange: [0, 360],
+            outputRange: ['0deg', '360deg']
+        });
+
+        // 24 bulb coordinates for the Vegas-style outer rim
+        const bulbCount = 24;
+        const bulbs = Array.from({ length: bulbCount }).map((_, j) => {
+            const angle = j * (360 / bulbCount);
+            const rad = (angle * Math.PI) / 180;
+            // Radius of outer rim is 142
+            const x = 150 + 142 * Math.cos(rad);
+            const y = 150 + 142 * Math.sin(rad);
+            return { x, y, isGold: j % 2 === 0 };
+        });
+
+        return (
+            <Modal
+                visible={isSpinModalVisible}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => {
+                    if (!isSpinning) setIsSpinModalVisible(false);
+                }}
+            >
+                <View style={styles.spinModalOverlay}>
+                    <View style={styles.spinModalContent}>
+                        {/* Close Button */}
+                        {!isSpinning && (
+                            <TouchableOpacity
+                                style={styles.closeSpinBtn}
+                                onPress={() => setIsSpinModalVisible(false)}
+                            >
+                                <Icon name="close" size={24} color={COLORS.white} />
+                            </TouchableOpacity>
+                        )}
+
+                        <Text style={styles.spinModalTitle}>🎯 Daily Spin & Win</Text>
+                        <Text style={styles.spinModalSubtitle}>
+                            Spin the wheel daily to win a guaranteed Free Tea every week!
+                        </Text>
+
+                        {spinStatus.isSunday ? (
+                            <View style={styles.cooldownContainer}>
+                                <Text style={{ fontSize: 44, marginVertical: 10 }}>🍵</Text>
+                                <Text style={styles.cooldownTitle}>Closed on Sundays</Text>
+                                <Text style={styles.cooldownTextDesc}>
+                                    Sunday is our weekly holiday. Come back tomorrow (Monday) to spin and win your free tea!
+                                </Text>
+                            </View>
+                        ) : !spinStatus.canSpin && !isSpinning ? (
+                            <View style={styles.cooldownContainer}>
+                                <Icon name="hourglass-outline" size={48} color="#FFB300" style={{ marginBottom: 15 }} />
+                                <Text style={styles.cooldownTitle}>Daily Spin Used</Text>
+                                <Text style={styles.cooldownTimer}>{cooldownText || '00:00:00'}</Text>
+                                <Text style={styles.cooldownTextDesc}>
+                                    Your next daily spin will be available in the above time. Stay tuned!
+                                </Text>
+                            </View>
+                        ) : (
+                            <View style={styles.wheelSection}>
+                                {/* Pointer */}
+                                <View style={styles.pointerContainer}>
+                                    <Svg width={30} height={30} viewBox="0 0 30 30">
+                                        <Path d="M 15 25 L 5 5 L 25 5 Z" fill={COLORS.primary} stroke="#FFFFFF" strokeWidth={2} />
+                                    </Svg>
+                                </View>
+
+                                {/* Animated Wheel Container */}
+                                <Animated.View style={[styles.wheelContainer, { transform: [{ rotate: spinInterpolate }] }]}>
+                                    <Svg width={290} height={290} viewBox="0 0 300 300">
+                                        <Defs>
+                                            {/* Gold Gradient for winning segments */}
+                                            <LinearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <Stop offset="0%" stopColor="#FFE082" />
+                                                <Stop offset="40%" stopColor="#FFB300" />
+                                                <Stop offset="100%" stopColor="#FF6F00" />
+                                            </LinearGradient>
+                                            
+                                            {/* Silver Gradient for better luck segments */}
+                                            <LinearGradient id="silverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <Stop offset="0%" stopColor="#FFFFFF" />
+                                                <Stop offset="50%" stopColor="#ECEFF1" />
+                                                <Stop offset="100%" stopColor="#90A4AE" />
+                                            </LinearGradient>
+
+                                            {/* Outer Rim Metallic Gradient */}
+                                            <LinearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <Stop offset="0%" stopColor="#4E342E" />
+                                                <Stop offset="50%" stopColor="#3E2723" />
+                                                <Stop offset="100%" stopColor="#1B0F0D" />
+                                            </LinearGradient>
+
+                                            {/* Shiny Center Cap Gradient */}
+                                            <RadialGradient id="centerGrad" cx="50%" cy="50%" rx="50%" ry="50%">
+                                                <Stop offset="0%" stopColor="#FFFFFF" />
+                                                <Stop offset="40%" stopColor="#FFD54F" />
+                                                <Stop offset="85%" stopColor="#FF8F00" />
+                                                <Stop offset="100%" stopColor="#D84315" />
+                                            </RadialGradient>
+                                        </Defs>
+
+                                        {/* Outer circle rim */}
+                                        <Circle cx={150} cy={150} r={146} fill="url(#rimGrad)" stroke="#FFD54F" strokeWidth={2} />
+                                        
+                                        {/* 6 Segments */}
+                                        {Array.from({ length: 6 }).map((_, i) => {
+                                            const angle = i * 60;
+                                            const rad1 = (angle * Math.PI) / 180;
+                                            const rad2 = ((angle + 60) * Math.PI) / 180;
+                                            const x1 = 150 + 138 * Math.cos(rad1);
+                                            const y1 = 150 + 138 * Math.sin(rad1);
+                                            const x2 = 150 + 138 * Math.cos(rad2);
+                                            const y2 = 150 + 138 * Math.sin(rad2);
+                                            
+                                            const isWin = i % 2 === 0;
+                                            const segmentFill = isWin ? 'url(#goldGrad)' : 'url(#silverGrad)';
+                                            
+                                            const pathData = `M 150 150 L ${x1} ${y1} A 138 138 0 0 1 ${x2} ${y2} Z`;
+                                            const label = isWin ? "FREE" : "BETTER";
+                                            const subLabel = isWin ? "TEA" : "LUCK";
+                                            const emoji = isWin ? "🍵" : "👍";
+                                            
+                                            return (
+                                                <G key={i}>
+                                                    <Path d={pathData} fill={segmentFill} stroke="#FFFFFF" strokeWidth={1.5} />
+                                                    
+                                                    {/* Rotate Content */}
+                                                    <G transform={`rotate(${angle + 30}, 150, 150)`}>
+                                                        {/* FREE / BETTER (Shadow) */}
+                                                        <SvgText 
+                                                            x={225} 
+                                                            y={151.5} 
+                                                            fontSize={12} 
+                                                            fontWeight="900" 
+                                                            fill="#000000"
+                                                            opacity={0.4}
+                                                            textAnchor="middle"
+                                                            alignmentBaseline="middle"
+                                                            transform="rotate(90, 225, 150)"
+                                                        >
+                                                            {label}
+                                                        </SvgText>
+                                                        {/* FREE / BETTER (Main) */}
+                                                        <SvgText 
+                                                            x={225} 
+                                                            y={150} 
+                                                            fontSize={12} 
+                                                            fontWeight="900" 
+                                                            fill={isWin ? '#3E2723' : '#263238'} 
+                                                            textAnchor="middle"
+                                                            alignmentBaseline="middle"
+                                                            transform="rotate(90, 225, 150)"
+                                                        >
+                                                            {label}
+                                                        </SvgText>
+
+                                                        {/* TEA / LUCK (Shadow) */}
+                                                        <SvgText 
+                                                            x={252} 
+                                                            y={151.5} 
+                                                            fontSize={11} 
+                                                            fontWeight="900" 
+                                                            fill="#000000"
+                                                            opacity={0.4}
+                                                            textAnchor="middle"
+                                                            alignmentBaseline="middle"
+                                                            transform="rotate(90, 252, 150)"
+                                                        >
+                                                            {subLabel}
+                                                        </SvgText>
+                                                        {/* TEA / LUCK (Main) */}
+                                                        <SvgText 
+                                                            x={252} 
+                                                            y={150} 
+                                                            fontSize={11} 
+                                                            fontWeight="900" 
+                                                            fill={isWin ? '#5D4037' : '#455A64'} 
+                                                            textAnchor="middle"
+                                                            alignmentBaseline="middle"
+                                                            transform="rotate(90, 252, 150)"
+                                                        >
+                                                            {subLabel}
+                                                        </SvgText>
+                                                    </G>
+                                                </G>
+                                            );
+                                        })}
+
+                                        {/* Outer Rim Bulbs (Glossy lights around wheel) */}
+                                        {bulbs.map((bulb, idx) => (
+                                            <Circle
+                                                key={idx}
+                                                cx={bulb.x}
+                                                cy={bulb.y}
+                                                r={2.5}
+                                                fill={bulb.isGold ? "#FFFFFF" : "#FFD54F"}
+                                                stroke="#3E2723"
+                                                strokeWidth={0.5}
+                                            />
+                                        ))}
+
+                                        {/* Concentric 3D Center Cap */}
+                                        <Circle cx={150} cy={150} r={28} fill="url(#goldGrad)" stroke="#3E2723" strokeWidth={1.5} />
+                                        <Circle cx={150} cy={150} r={22} fill="url(#centerGrad)" />
+                                        <Circle cx={150} cy={150} r={12} fill={COLORS.primary} stroke="#FFFFFF" strokeWidth={1} />
+                                        <Circle cx={147} cy={147} r={3} fill="#FFFFFF" opacity={0.7} />
+                                    </Svg>
+                                </Animated.View>
+
+                                {/* Action Button */}
+                                <TouchableOpacity
+                                    style={[styles.spinButton, isSpinning && styles.spinButtonDisabled]}
+                                    activeOpacity={0.85}
+                                    onPress={handleSpin}
+                                    disabled={isSpinning}
+                                >
+                                    {isSpinning ? (
+                                        <ActivityIndicator color={COLORS.white} size="small" />
+                                    ) : (
+                                        <Text style={styles.spinButtonText}>SPIN NOW</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+                </View>
+            </Modal>
+        );
+    };
 
     const requestLocationPermission = async () => {
         if (Platform.OS === 'android') {
@@ -869,6 +1259,9 @@ const MenuScreen = ({ navigation }) => {
                     </TouchableOpacity>
                 </Animatable.View>
             )}
+
+            {renderSpinFAB()}
+            {renderSpinModal()}
 
             {/* Event Bulk Order Modal */}
             <Modal
@@ -1889,6 +2282,159 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: '600',
         color: COLORS.mediumGray,
+    },
+    // Spin & Win FAB Styles
+    spinFAB: {
+        position: 'absolute',
+        bottom: 90,
+        right: 20,
+        width: 70,
+        height: 70,
+        borderRadius: 35,
+        backgroundColor: COLORS.white,
+        borderWidth: 2,
+        borderColor: '#FFA726',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 999,
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+    },
+    spinFABLottie: {
+        width: 62,
+        height: 62,
+    },
+    cooldownBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        backgroundColor: COLORS.primary,
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1.5,
+        borderColor: COLORS.white,
+    },
+    // Spin Modal Styles
+    spinModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.75)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    spinModalContent: {
+        width: width * 0.9,
+        backgroundColor: '#1E1E1E',
+        borderRadius: SIZES.radiusLarge,
+        padding: 24,
+        alignItems: 'center',
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.4,
+        shadowRadius: 10,
+        borderWidth: 1.5,
+        borderColor: '#FFB300',
+    },
+    closeSpinBtn: {
+        position: 'absolute',
+        top: 16,
+        right: 16,
+        zIndex: 10,
+        padding: 4,
+    },
+    spinModalTitle: {
+        fontSize: 22,
+        fontWeight: '900',
+        color: COLORS.white,
+        textAlign: 'center',
+        marginBottom: 6,
+        letterSpacing: 0.5,
+    },
+    spinModalSubtitle: {
+        fontSize: 13,
+        color: 'rgba(255, 255, 255, 0.6)',
+        textAlign: 'center',
+        marginBottom: 24,
+        lineHeight: 18,
+        paddingHorizontal: 10,
+    },
+    cooldownContainer: {
+        alignItems: 'center',
+        paddingVertical: 20,
+    },
+    cooldownTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: COLORS.white,
+        marginBottom: 8,
+    },
+    cooldownTimer: {
+        fontSize: 34,
+        fontWeight: '900',
+        color: '#FFB300',
+        marginVertical: 12,
+        letterSpacing: 2,
+    },
+    cooldownTextDesc: {
+        fontSize: 12,
+        color: 'rgba(255, 255, 255, 0.5)',
+        textAlign: 'center',
+        lineHeight: 16,
+        paddingHorizontal: 20,
+    },
+    wheelSection: {
+        alignItems: 'center',
+        width: '100%',
+    },
+    pointerContainer: {
+        zIndex: 10,
+        marginBottom: -15,
+        alignItems: 'center',
+    },
+    wheelContainer: {
+        width: 290,
+        height: 290,
+        borderRadius: 145,
+        overflow: 'hidden',
+        backgroundColor: '#121212',
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+    },
+    spinButton: {
+        marginTop: 35,
+        backgroundColor: COLORS.primary,
+        width: '80%',
+        paddingVertical: 14,
+        borderRadius: 30,
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        borderWidth: 1,
+        borderColor: '#FFD54F',
+    },
+    spinButtonDisabled: {
+        backgroundColor: '#3A3A3C',
+        borderColor: 'transparent',
+        elevation: 0,
+    },
+    spinButtonText: {
+        color: COLORS.white,
+        fontSize: 16,
+        fontWeight: 'bold',
+        letterSpacing: 1.5,
     },
 });
 

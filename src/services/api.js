@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // Central source of truth for the backend URL
-export const API_BASE_URL = 'https://api.foodman.shop';
-// export const API_BASE_URL = 'https://6700-2409-4072-110-bc7d-6113-527f-4157-7287.ngrok-free.app'
+// export const API_BASE_URL = 'https://api.foodman.shop';
+export const API_BASE_URL = 'https://ef3a-2401-4900-9270-edc9-a5ad-2084-3ebb-c512.ngrok-free.app'
 
 const api = axios.create({
     baseURL: `${API_BASE_URL}/api`,
