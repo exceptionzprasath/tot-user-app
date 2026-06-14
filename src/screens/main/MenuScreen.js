@@ -17,6 +17,7 @@ import {
     PermissionsAndroid,
     Modal,
     ScrollView,
+    KeyboardAvoidingView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Geolocation from 'react-native-geolocation-service';
@@ -35,9 +36,10 @@ import Svg, { G, Path, Text as SvgText, Circle, Defs, LinearGradient, RadialGrad
 const { width } = Dimensions.get('window');
 const STATUSBAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight : 0;
 const ITEM_WIDTH = 55;
+const ITEM_SPACING = 8; // marginHorizontal 4 * 2 = 8
 const getItemLayout = (data, index) => ({
-    length: ITEM_WIDTH,
-    offset: ITEM_WIDTH * index,
+    length: ITEM_WIDTH + ITEM_SPACING,
+    offset: (ITEM_WIDTH + ITEM_SPACING) * index,
     index,
 });
 
@@ -155,26 +157,41 @@ const banners = [
     { id: 'b4', image: require('../../assets/banner4.jpeg') },
 ];
 
-const BannerCarousel = () => {
+const BannerCarousel = React.memo(() => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const bannerRef = useRef(null);
+    const currentIndexRef = useRef(0);
 
     useEffect(() => {
         if (banners.length <= 1) return;
 
-        const timer = setTimeout(() => {
-            const nextIndex = (currentIndex + 1) % banners.length;
+        const interval = setInterval(() => {
+            const nextIndex = (currentIndexRef.current + 1) % banners.length;
             if (bannerRef.current) {
-                bannerRef.current.scrollToIndex({
-                    index: nextIndex,
-                    animated: true,
-                });
-                setCurrentIndex(nextIndex);
+                try {
+                    bannerRef.current.scrollToIndex({
+                        index: nextIndex,
+                        animated: true,
+                    });
+                    currentIndexRef.current = nextIndex;
+                    setCurrentIndex(nextIndex);
+                } catch (err) {
+                    // Fail silently or retry handled by onScrollToIndexFailed
+                }
             }
-        }, 3000); // 2 seconds speed
+        }, 3000); // Auto-scroll every 3 seconds
 
-        return () => clearTimeout(timer);
-    }, [currentIndex]);
+        return () => clearInterval(interval);
+    }, []);
+
+    const handleScrollEnd = (e) => {
+        const x = e.nativeEvent.contentOffset.x;
+        const index = Math.round(x / width);
+        if (index >= 0 && index < banners.length) {
+            currentIndexRef.current = index;
+            setCurrentIndex(index);
+        }
+    };
 
     return (
         <View style={styles.bannersSection}>
@@ -192,14 +209,8 @@ const BannerCarousel = () => {
                 getItemLayout={(data, index) => (
                     { length: width, offset: width * index, index }
                 )}
-                onScroll={(e) => {
-                    const x = e.nativeEvent.contentOffset.x;
-                    const index = Math.round(x / width);
-                    if (index >= 0 && index < banners.length && index !== currentIndex) {
-                        setCurrentIndex(index);
-                    }
-                }}
-                scrollEventThrottle={16}
+                onMomentumScrollEnd={handleScrollEnd}
+                onScrollEndDrag={handleScrollEnd}
                 renderItem={({ item }) => (
                     <View style={styles.bannerContainer}>
                         <Image
@@ -228,11 +239,11 @@ const BannerCarousel = () => {
             </View>
         </View>
     );
-};
+});
 
 const categories = [
-    { id: 'all', name: 'All', icon: 'grid-outline' },
-    { id: 'tea', name: 'Tea', icon: 'leaf-outline' },
+    // { id: 'all', name: 'All', icon: 'grid-outline' },
+    // { id: 'tea', name: 'Tea', icon: 'leaf-outline' },
     // { id: 'snacks', name: 'Snacks', icon: 'fast-food-outline' },
 ];
 
@@ -295,6 +306,32 @@ const MenuScreen = ({ navigation }) => {
                 });
             } catch (e) {}
         };
+
+        const handleCountInputChange = (text) => {
+            const cleaned = text.replace(/[^0-9]/g, '');
+            setBulkCount(cleaned);
+            if (cleaned) {
+                const num = parseInt(cleaned);
+                if (num >= 50 && num <= 1000) {
+                    try {
+                        flatListRef.current?.scrollToIndex({
+                            index: num - 50,
+                            animated: true,
+                            viewPosition: 0.5
+                        });
+                    } catch (e) {}
+                }
+            }
+        };
+
+        const handleScrollEnd = (e) => {
+            const offsetX = e.nativeEvent.contentOffset.x;
+            const index = Math.round(offsetX / 63);
+            if (index >= 0 && index < countOptions.length) {
+                const val = countOptions[index];
+                setBulkCount(val.toString());
+            }
+        };
         const [isPlacingBulkOrder, setIsPlacingBulkOrder] = useState(false);
         const [selectedBulkDate, setSelectedBulkDate] = useState('');
         const [selectedBulkTime, setSelectedBulkTime] = useState('11:00 AM');
@@ -331,6 +368,12 @@ const MenuScreen = ({ navigation }) => {
             }
             for (let d = 1; d <= totalDays; d++) {
                 days.push(new Date(year, month, d));
+            }
+            
+            // Pad the end to align calendar days perfectly in 7-column rows
+            const totalCells = Math.ceil(days.length / 7) * 7;
+            while (days.length < totalCells) {
+                days.push(null);
             }
             return days;
         };
@@ -474,25 +517,40 @@ const MenuScreen = ({ navigation }) => {
         }
     };
 
-    const renderSpinFAB = () => {
+    const renderSpinInlineCard = () => {
         if (!user) return null;
         return (
             <TouchableOpacity
-                style={styles.spinFAB}
-                activeOpacity={0.85}
+                style={styles.spinInlineCard}
+                activeOpacity={0.9}
                 onPress={() => setIsSpinModalVisible(true)}
             >
-                <LottieView
-                    source={require('../../assets/spin.json')}
-                    autoPlay
-                    loop
-                    style={styles.spinFABLottie}
-                />
-                {!spinStatus.canSpin && !spinStatus.isSunday && (
-                    <View style={styles.cooldownBadge}>
-                        <Icon name="time" size={10} color={COLORS.white} />
+                <View style={styles.spinInlineLeft}>
+                    <LottieView
+                        source={require('../../assets/spin.json')}
+                        autoPlay
+                        loop
+                        style={styles.spinInlineLottie}
+                    />
+                </View>
+                <View style={styles.spinInlineCenter}>
+                    <View style={styles.spinInlineHeaderRow}>
+                        <Text style={styles.spinInlineTitle}>🎯 Daily Spin & Win</Text>
+                        {!spinStatus.canSpin && !spinStatus.isSunday && (
+                            <View style={styles.spinInlineBadge}>
+                                <Icon name="time-outline" size={10} color={COLORS.white} />
+                                <Text style={styles.spinInlineBadgeText}>Cooldown</Text>
+                            </View>
+                        )}
                     </View>
-                )}
+                    <Text style={styles.spinInlineSubtitle}>
+                        {!spinStatus.canSpin 
+                            ? `Next spin in ${cooldownText || '00:00:00'}` 
+                            : "Spin the wheel to win a guaranteed Free Tea!"
+                        }
+                    </Text>
+                </View>
+                <Icon name="chevron-forward" size={18} color="#FFB300" style={styles.spinInlineArrow} />
             </TouchableOpacity>
         );
     };
@@ -540,15 +598,7 @@ const MenuScreen = ({ navigation }) => {
                             Spin the wheel daily to win a guaranteed Free Tea every week!
                         </Text>
 
-                        {spinStatus.isSunday ? (
-                            <View style={styles.cooldownContainer}>
-                                <Text style={{ fontSize: 44, marginVertical: 10 }}>🍵</Text>
-                                <Text style={styles.cooldownTitle}>Closed on Sundays</Text>
-                                <Text style={styles.cooldownTextDesc}>
-                                    Sunday is our weekly holiday. Come back tomorrow (Monday) to spin and win your free tea!
-                                </Text>
-                            </View>
-                        ) : !spinStatus.canSpin && !isSpinning ? (
+                        {!spinStatus.canSpin && !isSpinning ? (
                             <View style={styles.cooldownContainer}>
                                 <Icon name="hourglass-outline" size={48} color="#FFB300" style={{ marginBottom: 15 }} />
                                 <Text style={styles.cooldownTitle}>Daily Spin Used</Text>
@@ -1104,31 +1154,36 @@ const MenuScreen = ({ navigation }) => {
             {/* Banners Component */}
             <BannerCarousel />
 
+            {/* Spin & Win Promotion Inline Card */}
+            {renderSpinInlineCard()}
+
             {/* Categories */}
-            <View style={styles.categoriesContainer}>
-                {categories.map((category) => (
-                    <TouchableOpacity
-                        key={category.id}
-                        style={[
-                            styles.categoryItem,
-                            selectedCategory === category.id && styles.categoryItemActive,
-                        ]}
-                        onPress={() => setSelectedCategory(category.id)}>
-                        <Icon
-                            name={category.icon}
-                            size={16}
-                            color={selectedCategory === category.id ? COLORS.white : COLORS.textSecondary}
-                        />
-                        <Text
+            {categories.length > 0 && (
+                <View style={styles.categoriesContainer}>
+                    {categories.map((category) => (
+                        <TouchableOpacity
+                            key={category.id}
                             style={[
-                                styles.categoryText,
-                                selectedCategory === category.id && styles.categoryTextActive,
-                            ]}>
-                            {category.name}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
+                                styles.categoryItem,
+                                selectedCategory === category.id && styles.categoryItemActive,
+                            ]}
+                            onPress={() => setSelectedCategory(category.id)}>
+                            <Icon
+                                name={category.icon}
+                                size={16}
+                                color={selectedCategory === category.id ? COLORS.white : COLORS.textSecondary}
+                            />
+                            <Text
+                                style={[
+                                    styles.categoryText,
+                                    selectedCategory === category.id && styles.categoryTextActive,
+                                ]}>
+                                {category.name}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            )}
 
             {/* Section Title & View Toggle */}
             <View style={styles.sectionHeader}>
@@ -1171,11 +1226,7 @@ const MenuScreen = ({ navigation }) => {
         if (!hasFlaskTea) return null;
 
         return (
-            <Animatable.View
-                animation="fadeInUp"
-                delay={100}
-                style={styles.bulkSectionCard}
-            >
+            <View style={styles.bulkSectionCard}>
                 <View style={styles.bulkSectionHeader}>
                     <Icon name="cube" size={22} color={COLORS.primary} />
                     <Text style={styles.bulkSectionTitle}>Corporate & Event Bulk Orders</Text>
@@ -1191,7 +1242,7 @@ const MenuScreen = ({ navigation }) => {
                     <Text style={styles.bulkSectionButtonText}>Order Bulk Tea</Text>
                     <Icon name="calendar-outline" size={16} color={COLORS.white} style={{ marginLeft: 6 }} />
                 </TouchableOpacity>
-            </Animatable.View>
+            </View>
         );
     };
 
@@ -1213,9 +1264,9 @@ const MenuScreen = ({ navigation }) => {
                         numColumns={isGridView ? 2 : 1}
                         columnWrapperStyle={isGridView ? styles.row : null}
                         contentContainerStyle={filteredItems.length === 0 ? styles.emptyListContent : [styles.listContent, getCartCount() > 0 && { paddingBottom: 180 }]}
-                        ListHeaderComponent={renderListHeader}
-                        ListEmptyComponent={renderEmpty}
-                        ListFooterComponent={renderListFooter}
+                        ListHeaderComponent={renderListHeader()}
+                        ListEmptyComponent={renderEmpty()}
+                        ListFooterComponent={renderListFooter()}
                         renderItem={({ item, index }) => (
                             <Animatable.View
                                 animation="fadeInUp"
@@ -1260,7 +1311,6 @@ const MenuScreen = ({ navigation }) => {
                 </Animatable.View>
             )}
 
-            {renderSpinFAB()}
             {renderSpinModal()}
 
             {/* Event Bulk Order Modal */}
@@ -1271,202 +1321,246 @@ const MenuScreen = ({ navigation }) => {
                 onRequestClose={() => setIsBulkModalVisible(false)}
             >
                 <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        {/* Header */}
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>🍵 Event Bulk Order</Text>
-                            <TouchableOpacity
-                                style={styles.closeModalButton}
-                                onPress={() => setIsBulkModalVisible(false)}
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        style={{ width: '100%' }}
+                    >
+                        <View style={styles.modalContent}>
+                            {/* Header */}
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>🍵 Event Bulk Order</Text>
+                                <TouchableOpacity
+                                    style={styles.closeModalButton}
+                                    onPress={() => setIsBulkModalVisible(false)}
+                                >
+                                    <Icon name="close" size={24} color={COLORS.textPrimary} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <ScrollView 
+                                showsVerticalScrollIndicator={false} 
+                                style={{ maxHeight: 420 }}
+                                keyboardShouldPersistTaps="handled"
                             >
-                                <Icon name="close" size={24} color={COLORS.textPrimary} />
-                            </TouchableOpacity>
-                        </View>
+                                {/* Description */}
+                                <Text style={styles.modalDescription}>
+                                    Order Tea in bulk for your corporate meetings, celebrations or gatherings. Minimum order is 50 teas.
+                                </Text>
 
-                        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-                            {/* Description */}
-                            <Text style={styles.modalDescription}>
-                                Order Tea in bulk for your corporate meetings, celebrations or gatherings. Minimum order is 50 teas.
-                            </Text>
+                                {/* Form Inputs */}
+                                <View style={styles.modalForm}>
+                                    {/* Quantity Selector */}
+                                    <Text style={styles.inputLabel}>Order Count (Number of Teas)</Text>
+                                    
+                                    {/* Custom Quantity TextInput */}
+                                    <View style={{ 
+                                        flexDirection: 'row', 
+                                        alignItems: 'center', 
+                                        marginBottom: 16, 
+                                        gap: 10,
+                                        backgroundColor: COLORS.lightGray,
+                                        borderRadius: SIZES.radius,
+                                        borderWidth: 1,
+                                        borderColor: COLORS.gray,
+                                        paddingHorizontal: 12,
+                                        height: 46
+                                    }}>
+                                        <TextInput
+                                            style={{
+                                                flex: 1,
+                                                fontSize: 15,
+                                                fontWeight: '800',
+                                                color: COLORS.textPrimary,
+                                                padding: 0,
+                                            }}
+                                            keyboardType="numeric"
+                                            placeholder="Enter quantity (min 50)"
+                                            placeholderTextColor={COLORS.mediumGray}
+                                            value={bulkCount === '0' || bulkCount === 0 ? '' : bulkCount.toString()}
+                                            onChangeText={handleCountInputChange}
+                                        />
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.textSecondary }}>teas</Text>
+                                    </View>
 
-                            {/* Form Inputs */}
-                            <View style={styles.modalForm}>
-                                {/* Quantity Selector */}
-                                <Text style={styles.inputLabel}>Order Count (Number of Teas)</Text>
-                                
-                                {/* Quick Presets */}
-                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                                    {countPresets.map((preset) => {
-                                        const isSelected = parseInt(bulkCount) === preset;
-                                        return (
-                                            <TouchableOpacity
-                                                key={preset}
-                                                style={{
-                                                    paddingHorizontal: 10,
-                                                    paddingVertical: 6,
-                                                    borderRadius: 8,
-                                                    borderWidth: 1,
-                                                    borderColor: isSelected ? COLORS.primary : COLORS.mediumGray + '35',
-                                                    backgroundColor: isSelected ? COLORS.primary + '15' : COLORS.white,
-                                                }}
-                                                onPress={() => selectCount(preset)}
-                                                activeOpacity={0.7}
-                                            >
-                                                <Text style={{
-                                                    fontSize: 11,
-                                                    fontWeight: '800',
-                                                    color: isSelected ? COLORS.primary : COLORS.textSecondary
-                                                }}>{preset}</Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-                                </View>
-
-                                {/* Scroll Wheel FlatList */}
-                                <View style={{ 
-                                    borderWidth: 1.5, 
-                                    borderColor: COLORS.lightGray, 
-                                    borderRadius: 12, 
-                                    paddingVertical: 10, 
-                                    backgroundColor: '#F9F9F9',
-                                    marginBottom: 16
-                                }}>
-                                    <FlatList
-                                        ref={flatListRef}
-                                        horizontal
-                                        data={countOptions}
-                                        keyExtractor={(item) => item.toString()}
-                                        showsHorizontalScrollIndicator={false}
-                                        getItemLayout={getItemLayout}
-                                        contentContainerStyle={{ paddingHorizontal: (width - ITEM_WIDTH) / 2 - 20 }}
-                                        renderItem={({ item }) => {
-                                            const isSelected = parseInt(bulkCount) === item;
+                                    {/* Quick Presets */}
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                                        {countPresets.map((preset) => {
+                                            const isSelected = parseInt(bulkCount) === preset;
                                             return (
                                                 <TouchableOpacity
+                                                    key={preset}
                                                     style={{
-                                                        width: ITEM_WIDTH,
-                                                        height: ITEM_WIDTH,
-                                                        borderRadius: ITEM_WIDTH / 2,
-                                                        justifyContent: 'center',
-                                                        alignItems: 'center',
-                                                        backgroundColor: isSelected ? COLORS.primary : 'transparent',
-                                                        borderWidth: isSelected ? 0 : 1,
-                                                        borderColor: isSelected ? 'transparent' : COLORS.mediumGray + '25',
-                                                        marginHorizontal: 4,
+                                                        paddingHorizontal: 10,
+                                                        paddingVertical: 6,
+                                                        borderRadius: 8,
+                                                        borderWidth: 1,
+                                                        borderColor: isSelected ? COLORS.primary : COLORS.mediumGray + '35',
+                                                        backgroundColor: isSelected ? COLORS.primary + '15' : COLORS.white,
                                                     }}
-                                                    onPress={() => selectCount(item)}
+                                                    onPress={() => selectCount(preset)}
                                                     activeOpacity={0.7}
                                                 >
                                                     <Text style={{
-                                                        fontSize: SIZES.regular,
+                                                        fontSize: 11,
                                                         fontWeight: '800',
-                                                        color: isSelected ? COLORS.white : COLORS.textPrimary
-                                                    }}>
-                                                        {item}
+                                                        color: isSelected ? COLORS.primary : COLORS.textSecondary
+                                                    }}>{preset}</Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+
+                                    {/* Scroll Wheel FlatList */}
+                                    <View style={{ 
+                                        borderWidth: 1.5, 
+                                        borderColor: COLORS.lightGray, 
+                                        borderRadius: 12, 
+                                        paddingVertical: 10, 
+                                        backgroundColor: '#F9F9F9',
+                                        marginBottom: 16
+                                    }}>
+                                        <FlatList
+                                            ref={flatListRef}
+                                            horizontal
+                                            data={countOptions}
+                                            keyExtractor={(item) => item.toString()}
+                                            showsHorizontalScrollIndicator={false}
+                                            getItemLayout={getItemLayout}
+                                            snapToInterval={63}
+                                            snapToAlignment="center"
+                                            decelerationRate="fast"
+                                            contentContainerStyle={{ paddingHorizontal: (width - 63) / 2 }}
+                                            onMomentumScrollEnd={handleScrollEnd}
+                                            onScrollEndDrag={handleScrollEnd}
+                                            renderItem={({ item }) => {
+                                                const isSelected = parseInt(bulkCount) === item;
+                                                return (
+                                                    <TouchableOpacity
+                                                        style={{
+                                                            width: ITEM_WIDTH,
+                                                            height: ITEM_WIDTH,
+                                                            borderRadius: ITEM_WIDTH / 2,
+                                                            justifyContent: 'center',
+                                                            alignItems: 'center',
+                                                            backgroundColor: isSelected ? COLORS.primary : 'transparent',
+                                                            borderWidth: isSelected ? 0 : 1,
+                                                            borderColor: isSelected ? 'transparent' : COLORS.mediumGray + '25',
+                                                            marginHorizontal: 4,
+                                                        }}
+                                                        onPress={() => selectCount(item)}
+                                                        activeOpacity={0.7}
+                                                    >
+                                                        <Text style={{
+                                                            fontSize: SIZES.regular,
+                                                            fontWeight: '800',
+                                                            color: isSelected ? COLORS.white : COLORS.textPrimary
+                                                        }}>
+                                                            {item}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            }}
+                                        />
+                                    </View>
+
+                                    {/* Expected Delivery Date Selector */}
+                                    <Text style={styles.inputLabel}>Expected Delivery Date</Text>
+                                    <TouchableOpacity
+                                        style={styles.dateSelectorBtn}
+                                        onPress={() => setIsCalendarVisible(true)}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Icon name="calendar-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
+                                        <Text style={styles.dateSelectorBtnText}>
+                                            {selectedBulkDate ? formatDateString(selectedBulkDate) : 'Select Delivery Date'}
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    {/* Expected Delivery Time Selector */}
+                                    <Text style={styles.inputLabel}>Expected Delivery Time</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsContainer} contentContainerStyle={{ gap: 8, paddingBottom: 12 }}>
+                                        {timeSlots.map((slot) => {
+                                            const isSelected = selectedBulkTime === slot;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={slot}
+                                                    style={[styles.timeChip, isSelected && styles.chipActive]}
+                                                    onPress={() => setSelectedBulkTime(slot)}
+                                                    activeOpacity={0.7}
+                                                >
+                                                    <Text style={[styles.timeChipText, isSelected && styles.chipMainTextActive]}>
+                                                        {slot === 'custom' ? 'Custom Time' : slot}
                                                     </Text>
                                                 </TouchableOpacity>
                                             );
-                                        }}
-                                    />
+                                        })}
+                                    </ScrollView>
+
+                                    {selectedBulkTime === 'custom' && (
+                                        <TextInput
+                                            style={styles.textInput}
+                                            placeholder="e.g. 10:30 AM, 02:45 PM"
+                                            placeholderTextColor={COLORS.mediumGray}
+                                            value={customBulkTime}
+                                            onChangeText={setCustomBulkTime}
+                                        />
+                                    )}
+
+                                    {/* Location Input */}
+                                    <Text style={styles.inputLabel}>Delivery Location</Text>
+                                    <View style={styles.locationInputContainer}>
+                                        <TextInput
+                                            style={[styles.textInput, styles.locationInput]}
+                                            placeholder="Enter complete delivery address"
+                                            placeholderTextColor={COLORS.mediumGray}
+                                            multiline
+                                            numberOfLines={3}
+                                            value={bulkLocationAddress}
+                                            onChangeText={setBulkLocationAddress}
+                                        />
+                                        <TouchableOpacity
+                                            style={styles.gpsButton}
+                                            onPress={handleFetchBulkLocation}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Icon name="locate" size={20} color={COLORS.primary} />
+                                            <Text style={styles.gpsButtonText}>Use GPS Location</Text>
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
 
-                                {/* Expected Delivery Date Selector */}
-                                <Text style={styles.inputLabel}>Expected Delivery Date</Text>
-                                <TouchableOpacity
-                                    style={styles.dateSelectorBtn}
-                                    onPress={() => setIsCalendarVisible(true)}
-                                    activeOpacity={0.8}
-                                >
-                                    <Icon name="calendar-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
-                                    <Text style={styles.dateSelectorBtnText}>
-                                        {selectedBulkDate ? formatDateString(selectedBulkDate) : 'Select Delivery Date'}
-                                    </Text>
-                                </TouchableOpacity>
+                                {/* Cost & Summary */}
+                                <View style={styles.modalCostContainer}>
+                                    <Text style={styles.costLabel}>Price per tea:</Text>
+                                    <Text style={styles.costValue}>₹13 / tea</Text>
+                                </View>
+                                <View style={[styles.modalCostContainer, { borderTopWidth: 1, borderTopColor: COLORS.lightGray, paddingTop: 10 }]}>
+                                    <Text style={styles.totalLabel}>Total Estimated Cost:</Text>
+                                    <Text style={styles.totalValue}>₹{(parseInt(bulkCount) || 0) * 13}</Text>
+                                </View>
+                            </ScrollView>
 
-                                {/* Expected Delivery Time Selector */}
-                                <Text style={styles.inputLabel}>Expected Delivery Time</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsContainer} contentContainerStyle={{ gap: 8, paddingBottom: 12 }}>
-                                    {timeSlots.map((slot) => {
-                                        const isSelected = selectedBulkTime === slot;
-                                        return (
-                                            <TouchableOpacity
-                                                key={slot}
-                                                style={[styles.timeChip, isSelected && styles.chipActive]}
-                                                onPress={() => setSelectedBulkTime(slot)}
-                                                activeOpacity={0.7}
-                                            >
-                                                <Text style={[styles.timeChipText, isSelected && styles.chipMainTextActive]}>
-                                                    {slot === 'custom' ? 'Custom Time' : slot}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-                                </ScrollView>
-
-                                {selectedBulkTime === 'custom' && (
-                                    <TextInput
-                                        style={styles.textInput}
-                                        placeholder="e.g. 10:30 AM, 02:45 PM"
-                                        placeholderTextColor={COLORS.mediumGray}
-                                        value={customBulkTime}
-                                        onChangeText={setCustomBulkTime}
-                                    />
+                            {/* Order Now Button */}
+                            <TouchableOpacity
+                                style={[
+                                    styles.orderNowButton,
+                                    (!bulkCount || parseInt(bulkCount) < 50 || !bulkLocationAddress.trim() || isPlacingBulkOrder) && styles.orderNowButtonDisabled
+                                ]}
+                                onPress={handlePlaceBulkOrder}
+                                disabled={!bulkCount || parseInt(bulkCount) < 50 || !bulkLocationAddress.trim() || isPlacingBulkOrder}
+                                activeOpacity={0.8}
+                            >
+                                {isPlacingBulkOrder ? (
+                                    <ActivityIndicator size="small" color={COLORS.white} />
+                                ) : (
+                                    <>
+                                        <Text style={styles.orderNowButtonText}>Order Now</Text>
+                                        <Icon name="arrow-forward" size={18} color={COLORS.white} style={{ marginLeft: 8 }} />
+                                    </>
                                 )}
-
-                                {/* Location Input */}
-                                <Text style={styles.inputLabel}>Delivery Location</Text>
-                                <View style={styles.locationInputContainer}>
-                                    <TextInput
-                                        style={[styles.textInput, styles.locationInput]}
-                                        placeholder="Enter complete delivery address"
-                                        placeholderTextColor={COLORS.mediumGray}
-                                        multiline
-                                        numberOfLines={3}
-                                        value={bulkLocationAddress}
-                                        onChangeText={setBulkLocationAddress}
-                                    />
-                                    <TouchableOpacity
-                                        style={styles.gpsButton}
-                                        onPress={handleFetchBulkLocation}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Icon name="locate" size={20} color={COLORS.primary} />
-                                        <Text style={styles.gpsButtonText}>Use GPS Location</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-
-                            {/* Cost & Summary */}
-                            <View style={styles.modalCostContainer}>
-                                <Text style={styles.costLabel}>Price per tea:</Text>
-                                <Text style={styles.costValue}>₹13 / tea</Text>
-                            </View>
-                            <View style={[styles.modalCostContainer, { borderTopWidth: 1, borderTopColor: COLORS.lightGray, paddingTop: 10 }]}>
-                                <Text style={styles.totalLabel}>Total Estimated Cost:</Text>
-                                <Text style={styles.totalValue}>₹{(parseInt(bulkCount) || 0) * 13}</Text>
-                            </View>
-                        </ScrollView>
-
-                        {/* Order Now Button */}
-                        <TouchableOpacity
-                            style={[
-                                styles.orderNowButton,
-                                (!bulkCount || parseInt(bulkCount) < 50 || !bulkLocationAddress.trim() || isPlacingBulkOrder) && styles.orderNowButtonDisabled
-                            ]}
-                            onPress={handlePlaceBulkOrder}
-                            disabled={!bulkCount || parseInt(bulkCount) < 50 || !bulkLocationAddress.trim() || isPlacingBulkOrder}
-                            activeOpacity={0.8}
-                        >
-                            {isPlacingBulkOrder ? (
-                                <ActivityIndicator size="small" color={COLORS.white} />
-                            ) : (
-                                <>
-                                    <Text style={styles.orderNowButtonText}>Order Now</Text>
-                                    <Icon name="arrow-forward" size={18} color={COLORS.white} style={{ marginLeft: 8 }} />
-                                </>
-                            )}
-                        </TouchableOpacity>
-                    </View>
+                            </TouchableOpacity>
+                        </View>
+                    </KeyboardAvoidingView>
                 </View>
             </Modal>
 
@@ -2283,42 +2377,78 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: COLORS.mediumGray,
     },
-    // Spin & Win FAB Styles
-    spinFAB: {
-        position: 'absolute',
-        bottom: 90,
-        right: 20,
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        backgroundColor: COLORS.white,
-        borderWidth: 2,
-        borderColor: '#FFA726',
-        justifyContent: 'center',
+    // Spin & Win Inline Card Styles
+    spinInlineCard: {
+        flexDirection: 'row',
         alignItems: 'center',
-        zIndex: 999,
-        elevation: 8,
+        backgroundColor: '#1E1E1E', // Dark charcoal premium background
+        marginHorizontal: SIZES.padding,
+        marginTop: 6,
+        marginBottom: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        borderRadius: SIZES.radiusLarge,
+        borderWidth: 1.5,
+        borderColor: '#FFB300', // Gold border
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+        elevation: 5,
     },
-    spinFABLottie: {
-        width: 62,
-        height: 62,
-    },
-    cooldownBadge: {
-        position: 'absolute',
-        top: -4,
-        right: -4,
-        backgroundColor: COLORS.primary,
-        width: 18,
-        height: 18,
-        borderRadius: 9,
+    spinInlineLeft: {
+        width: 50,
+        height: 50,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1.5,
-        borderColor: COLORS.white,
+        marginRight: 12,
+        backgroundColor: '#2D2D2D',
+        borderRadius: 25,
+        borderWidth: 1,
+        borderColor: '#FFD54F',
+    },
+    spinInlineLottie: {
+        width: 42,
+        height: 42,
+    },
+    spinInlineCenter: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    spinInlineHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    spinInlineTitle: {
+        fontSize: 14,
+        fontWeight: '900',
+        color: COLORS.white,
+        letterSpacing: 0.5,
+    },
+    spinInlineBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.primary,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        gap: 3,
+    },
+    spinInlineBadgeText: {
+        color: COLORS.white,
+        fontSize: 8,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+    },
+    spinInlineSubtitle: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: 'rgba(255, 255, 255, 0.6)',
+        marginTop: 3,
+    },
+    spinInlineArrow: {
+        marginLeft: 6,
     },
     // Spin Modal Styles
     spinModalOverlay: {

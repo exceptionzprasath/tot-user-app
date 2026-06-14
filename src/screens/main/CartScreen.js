@@ -625,28 +625,7 @@ const CartScreen = ({ navigation }) => {
                                                 </View>
                                             </View>
 
-                                            {/* Payment Method Selection */}
-                                            <View style={styles.paymentMethodSelection}>
-                                                <Text style={styles.paymentMethodTitle}>Select Payment Method:</Text>
-                                                <View style={styles.paymentMethodList}>
-                                                    {/*
-                                                    <TouchableOpacity 
-                                                        style={[styles.paymentMethodChip, paymentMethod === 'ONLINE' && styles.paymentMethodChipActive]}
-                                                        onPress={() => setPaymentMethod('ONLINE')}
-                                                    >
-                                                        <Icon name="card-outline" size={16} color={paymentMethod === 'ONLINE' ? COLORS.white : COLORS.primary} />
-                                                        <Text style={[styles.paymentMethodChipText, paymentMethod === 'ONLINE' && styles.paymentMethodChipTextActive]}>Pay Online</Text>
-                                                    </TouchableOpacity>
-                                                    */}
-                                                    <TouchableOpacity 
-                                                        style={[styles.paymentMethodChip, paymentMethod === 'COD' && styles.paymentMethodChipActive]}
-                                                        onPress={() => setPaymentMethod('COD')}
-                                                    >
-                                                        <Icon name="cash-outline" size={16} color={paymentMethod === 'COD' ? COLORS.white : COLORS.primary} />
-                                                        <Text style={[styles.paymentMethodChipText, paymentMethod === 'COD' && styles.paymentMethodChipTextActive]}>COD (Cash)</Text>
-                                                    </TouchableOpacity>
-                                                </View>
-                                            </View>
+
 
                                             {/* Live Riders Map (Between Payment Selection and Delivery Info) */}
                                             <View style={{
@@ -1270,47 +1249,7 @@ const styles = StyleSheet.create({
     savedLocationChipTextActive: {
         color: COLORS.white,
     },
-    paymentMethodSelection: {
-        marginTop: 15,
-        paddingTop: 15,
-        borderTopWidth: 1,
-        borderTopColor: COLORS.lightGray,
-    },
-    paymentMethodTitle: {
-        fontSize: SIZES.small,
-        fontWeight: '600',
-        color: COLORS.textSecondary,
-        marginBottom: 10,
-    },
-    paymentMethodList: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    paymentMethodChip: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: COLORS.primary + '15',
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        borderRadius: 12,
-        gap: 8,
-        borderWidth: 1,
-        borderColor: COLORS.primary + '30',
-    },
-    paymentMethodChipActive: {
-        backgroundColor: COLORS.primary,
-        borderColor: COLORS.primary,
-    },
-    paymentMethodChipText: {
-        fontSize: SIZES.small + 1,
-        fontWeight: '600',
-        color: COLORS.primary,
-    },
-    paymentMethodChipTextActive: {
-        color: COLORS.white,
-    },
+
     addLocationPromptCard: {
         backgroundColor: COLORS.primary + '10',
         borderRadius: 12,

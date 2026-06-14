@@ -327,7 +327,7 @@ const ProfileScreen = ({ navigation }) => {
                     </TouchableOpacity>
 
                     {/* Version */}
-                    <Text style={styles.versionText}>Version 1.13</Text>
+                    <Text style={styles.versionText}>Version 1.14</Text>
                 </View>
             </ScrollView>
         </View>

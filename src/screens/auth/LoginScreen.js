@@ -211,11 +211,11 @@ const LoginScreen = ({ navigation }) => {
                             By continuing, you agree to our
                         </Text>
                         <View style={styles.footerLinks}>
-                            <TouchableOpacity>
+                            <TouchableOpacity onPress={() => navigation.navigate('TermsPrivacy')}>
                                 <Text style={styles.linkText}>Terms of Service</Text>
                             </TouchableOpacity>
                             <Text style={styles.footerText}> & </Text>
-                            <TouchableOpacity>
+                            <TouchableOpacity onPress={() => navigation.navigate('TermsPrivacy')}>
                                 <Text style={styles.linkText}>Privacy Policy</Text>
                             </TouchableOpacity>
                         </View>

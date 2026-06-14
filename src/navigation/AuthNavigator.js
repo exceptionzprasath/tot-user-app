@@ -3,6 +3,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import LoginScreen from '../screens/auth/LoginScreen';
 import OTPScreen from '../screens/auth/OTPScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
+import TermsPrivacyScreen from '../screens/main/TermsPrivacyScreen';
 
 const Stack = createStackNavigator();
 
@@ -29,6 +30,7 @@ const AuthNavigator = () => {
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
             <Stack.Screen name="OTP" component={OTPScreen} />
+            <Stack.Screen name="TermsPrivacy" component={TermsPrivacyScreen} />
         </Stack.Navigator>
     );
 };
