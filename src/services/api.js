@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Central source of truth for the backend URL
 export const API_BASE_URL = 'https://api.foodman.shop';
-// export const API_BASE_URL = 'https://ef3a-2401-4900-9270-edc9-a5ad-2084-3ebb-c512.ngrok-free.app'
+// export const API_BASE_URL = 'https://f648-103-110-238-16.ngrok-free.app'
 
 const api = axios.create({
     baseURL: `${API_BASE_URL}/api`,
@@ -27,7 +27,7 @@ api.interceptors.response.use(
         if (isNetworkError) {
             config.__isRetryRequest = true;
             console.log('🔄 Axios Network Error detected. Retrying request to:', config.url);
-            
+
             // Wait 500ms before retrying to allow socket connection to warm up
             await new Promise((resolve) => setTimeout(resolve, 500));
             return api(config);
