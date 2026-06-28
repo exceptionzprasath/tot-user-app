@@ -1155,7 +1155,7 @@ const MenuScreen = ({ navigation }) => {
             <BannerCarousel />
 
             {/* Spin & Win Promotion Inline Card */}
-            {renderSpinInlineCard()}
+            {/* {renderSpinInlineCard()} */}
 
             {/* Categories */}
             {categories.length > 0 && (
@@ -1311,7 +1311,7 @@ const MenuScreen = ({ navigation }) => {
                 </Animatable.View>
             )}
 
-            {renderSpinModal()}
+            {/* {renderSpinModal()} */}
 
             {/* Event Bulk Order Modal */}
             <Modal
